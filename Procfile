@@ -1,1 +1,1 @@
-worker: python guild_manager.py
+worker: python t_tool.py
