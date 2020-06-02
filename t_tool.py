@@ -503,7 +503,7 @@ async def top(ctx, page="1"):
             desc = ""
             curl = channel_url(ctx.channel)
             for i, tup in enumerate(tuples):
-                nick = f"[{anf(client.get_user(tup[0]))}]({curl})"
+                nick = f"[{client.get_user(tup[0])}]({curl})"
                 desc += f"`{pos + i + 1}.` {nick} | Рейтиг: {tup[1]} \\⚡| Турниров: {tup[2]} \\🏆\n"
             
             reply = discord.Embed(
