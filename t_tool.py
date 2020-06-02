@@ -500,6 +500,26 @@ async def top(ctx, page="1"):
 #----------------------------------------------+
 #                   Errors                     |
 #----------------------------------------------+
+# COOLDOWN
+@client.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        
+        def TimeExpand(time):
+            if time//60 > 0:
+                return str(time//60)+'мин. '+str(time%60)+' сек.'
+            elif time > 0:
+                return str(time)+' сек.'
+            else:
+                return f"0.1 сек."
+        
+        cool_notify = discord.Embed(
+                title='⏳ Подождите немного',
+                description = f"Осталось {TimeExpand(int(error.retry_after))}"
+            )
+        await ctx.send(embed=cool_notify)
+
+# MISSING ARGS
 @rating.error
 async def rating_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
