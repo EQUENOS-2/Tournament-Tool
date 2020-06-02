@@ -10,7 +10,7 @@ from pymongo import MongoClient
 #----------------------------------------------+
 bot_token = str(os.environ.get("bot_token"))
 db_token = str(os.environ.get("db_token"))
-prefix = ".."
+prefix = "+"
 
 client = commands.Bot(prefix)
 client.remove_command("help")
