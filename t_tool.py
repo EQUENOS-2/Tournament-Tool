@@ -10,7 +10,7 @@ from pymongo import MongoClient
 #----------------------------------------------+
 bot_token = str(os.environ.get("bot_token"))
 db_token = str(os.environ.get("db_token"))
-prefix = "+"
+prefix = ".."
 
 client = commands.Bot(prefix)
 client.remove_command("help")
@@ -501,8 +501,9 @@ async def top(ctx, page="1"):
             tuples, pos = lb.get_page(page)
             del lb
             desc = ""
+            curl = channel_url(ctx.channel)
             for i, tup in enumerate(tuples):
-                nick = anf(client.get_user(tup[0]))
+                nick = f"[{anf(client.get_user(tup[0]))}]({curl})"
                 desc += f"`{pos + i + 1}.` {nick} | Рейтиг: {tup[1]} \\⚡| Турниров: {tup[2]} \\🏆\n"
             
             reply = discord.Embed(
