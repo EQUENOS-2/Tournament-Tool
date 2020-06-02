@@ -28,6 +28,21 @@ owner_ids = [
 #----------------------------------------------+
 #                  Functions                   |
 #----------------------------------------------+
+def anf(obj):
+    obj = str(obj)
+    alph = "1234567890qwertyuiopasdfghjklzxcvbnm \n\t"
+    out = ""
+    for s in obj:
+        if s.lower() not in alph:
+            out += "\\"
+        out += s
+    return out
+
+
+def channel_url(channel):
+    return f"https://discordapp.com/channels/{channel.guild.id}/{channel.id}"
+
+
 def carve_int(string):
     digits = [str(i) for i in range(10)]
     out = ""
@@ -487,7 +502,8 @@ async def top(ctx, page="1"):
             del lb
             desc = ""
             for i, tup in enumerate(tuples):
-                desc += f"`{pos + i + 1}.` <@!{tup[0]}> | Рейтиг: {tup[1]} \\⚡| Турниров: {tup[2]} \\🏆\n"
+                nick = anf(client.get_user(tup[0]))
+                desc += f"`{pos + i + 1}.` {nick} | Рейтиг: {tup[1]} \\⚡| Турниров: {tup[2]} \\🏆\n"
             
             reply = discord.Embed(
                 title="🏆 Топ участников",
