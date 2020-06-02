@@ -10,7 +10,7 @@ from pymongo import MongoClient
 #----------------------------------------------+
 bot_token = str(os.environ.get("bot_token"))
 db_token = str(os.environ.get("db_token"))
-prefix = ".."
+prefix = "+"
 
 client = commands.Bot(prefix)
 client.remove_command("help")
@@ -221,6 +221,8 @@ async def help(ctx, *, section=None):
     )
     await ctx.send(embed=reply)
 
+
+@commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(aliases=["r"])
 async def rating(ctx, num, place, *, member_search):
     detect = Detect(ctx.guild)
@@ -283,6 +285,7 @@ async def rating(ctx, num, place, *, member_search):
         await ctx.send(embed=reply)
 
 
+@commands.cooldown(1, 1, commands.BucketType.member)
 @client.command()
 async def back(ctx, *, member_search):
     detect = Detect(ctx.guild)
@@ -336,6 +339,7 @@ async def back(ctx, *, member_search):
             await ctx.send(embed=reply)
 
 
+@commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(aliases=["profile"])
 async def me(ctx, *, member_search=None):
     if member_search is None:
@@ -380,6 +384,7 @@ async def me(ctx, *, member_search=None):
         await ctx.send(embed=reply)
 
 
+@commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(aliases=["tournament-history", "th"])
 async def tournament_history(ctx, page, *, member_search=None):
     if member_search is None:
@@ -441,6 +446,7 @@ async def tournament_history(ctx, page, *, member_search=None):
             await ctx.send(embed=reply)
 
 
+@commands.cooldown(1, 3, commands.BucketType.member)
 @client.command()
 async def top(ctx, page="1"):
     if not page.isdigit():
