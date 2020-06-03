@@ -4,6 +4,7 @@ import asyncio
 import os, json
 import pymongo
 from pymongo import MongoClient
+from random import choice as random_choice
 
 #----------------------------------------------+
 #                Connections                   |
@@ -235,6 +236,19 @@ async def help(ctx, *, section=None):
         )
     )
     await ctx.send(embed=reply)
+
+
+@commands.cooldown(1, 1, commands.BucketType.member)
+@client.command()
+async def test(ctx):
+    word = "хуест"
+    _word = ""
+    for s in word:
+        if random_choice([True, False]):
+            _word += s.upper()
+        else:
+            _word += s
+    await ctx.send(_word)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
