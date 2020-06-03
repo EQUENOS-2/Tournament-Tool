@@ -241,14 +241,26 @@ async def help(ctx, *, section=None):
 @commands.cooldown(1, 1, commands.BucketType.member)
 @client.command()
 async def test(ctx):
-    word = "хуест"
-    _word = ""
-    for s in word:
-        if random_choice([True, False]):
-            _word += s.upper()
-        else:
-            _word += s
-    await ctx.send(_word)
+    if ctx.author.id not in owner_ids:
+        reply = discord.Embed(
+            title="⛔ Недостаточно прав",
+            description=(
+                "Необходимые права:\n"
+                "> Разработчик пельменеф"
+            ),
+            color=discord.Color.dark_red()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    else:
+        word = "хуест"
+        _word = ""
+        for s in word:
+            if random_choice([True, False]):
+                _word += s.upper()
+            else:
+                _word += s
+        await ctx.send(_word)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
