@@ -635,6 +635,24 @@ async def back_error(ctx, error):
         await ctx.send(embed=reply)
 
 
+@random.error
+async def random_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        p = ctx.prefix
+        cmd = ctx.command
+        reply = discord.Embed(
+            title=f"🗃 О команде `{cmd.name}`",
+            description=(
+                f"**Описание:** выбирает случайно число в указанном диапазоне\n"
+                f"**Использование:** `{p}{cmd.name} Ганица`\n"
+                f"**Примеры:** `{p}{cmd.name} 100` - случайное от `0` до `100`\n"
+                f"**->** `{p}{cmd.name} -80 80` - случайное от `-80` до `80`"
+            )
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+
+
 @tournament_history.error
 async def tournament_history_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
