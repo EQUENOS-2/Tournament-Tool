@@ -288,16 +288,28 @@ async def random(ctx, *, string):
         if len(nums) > 1:
             l_num, r_num = nums
         else:
-            l_num, r_num = min(0, nums[0]), max(0, nums[0])
-        result = randint(l_num, r_num)
-        reply = discord.Embed(
-            title=f"🎲 Случайное число между `{l_num}` и `{r_num}`",
-            description=f"**{result}**",
-            color=from_hex("#ffdead")
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            l_num, r_num = 0, nums[0]
+        l_num, r_num = min(l_num, r_num), max(l_num, r_num)
         
-        await ctx.send(embed=reply)
+        if r_num - l_num > 1E12:
+            reply = discord.Embed(
+                title="💥 Превышен лимит",
+                description=f"Разница между границами не должна превышать `10 ^ 12`",
+                color=discord.Color.dark_red()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+
+        else:
+            result = randint(l_num, r_num)
+            reply = discord.Embed(
+                title=f"🎲 Случайное число между `{l_num}` и `{r_num}`",
+                description=f"**{result}**",
+                color=from_hex("#ffdead")
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            
+            await ctx.send(embed=reply)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
