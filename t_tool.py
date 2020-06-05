@@ -4,7 +4,7 @@ import asyncio
 import os, json
 import pymongo
 from pymongo import MongoClient
-from random import choice as random_choice
+from random import randint
 
 #----------------------------------------------+
 #                Connections                   |
@@ -233,6 +233,7 @@ async def help(ctx, *, section=None):
             f"`{p}me` - профиль\n"
             f"`{p}tournament-history` - история турниров\n"
             f"`{p}top` - топ участников\n"
+            f"`{p}random` - случайное число\n"
         )
     )
     await ctx.send(embed=reply)
@@ -256,11 +257,47 @@ async def test(ctx):
         word = "хуест"
         _word = ""
         for s in word:
-            if random_choice([True, False]):
+            if randint(0, 1):
                 _word += s.upper()
             else:
                 _word += s
         await ctx.send(_word)
+
+
+@commands.cooldown(1, 1, commands.BucketType.member)
+@client.command(aliases=["rand"])
+async def random(ctx, string):
+    nums = string.split()[:2]
+    all_ints = True
+    for i, num in enumerate(nums):
+        if is_int(num):
+            nums[i] = int(num)
+        else:
+            all_ints = False
+            break
+    if not all_ints:
+        p, cmd = ctx.prefix, ctx.command.name
+        reply = discord.Embed(
+            title="💥 Неверный аргумент",
+            description=f"После `{p}{cmd}` должны стоять целые числа",
+            color=discord.Color.dark_red()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    else:
+        if len(nums) > 1:
+            l_num, r_num = nums
+        else:
+            l_num, r_num = min(0, nums[0]), max(0, nums[0])
+        result = randint(l_num, r_num)
+        reply = discord.Embed(
+            title=f"🎲 Случайное число между `{l_num}` и `{r_num}`",
+            description=f"**{result}**",
+            color=from_hex("#ffdead")
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        
+        await ctx.send(embed=reply)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
@@ -419,7 +456,7 @@ async def me(ctx, *, member_search=None):
                 f"**Сыграно турниров:** {trs} 🏆\n\n"
                 f"**История турниров:** `{ctx.prefix}tournament-history 1 {member}`"
             ),
-            color=ctx.guild.me.color
+            color=member.color
         )
         reply.set_thumbnail(url=member.avatar_url)
         await ctx.send(embed=reply)
