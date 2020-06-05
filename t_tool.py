@@ -266,7 +266,7 @@ async def test(ctx):
 
 @commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(aliases=["rand"])
-async def random(ctx, string):
+async def random(ctx, *, string):
     nums = string.split()[:2]
     all_ints = True
     for i, num in enumerate(nums):
@@ -643,7 +643,7 @@ async def random_error(ctx, error):
         reply = discord.Embed(
             title=f"🗃 О команде `{cmd.name}`",
             description=(
-                f"**Описание:** выбирает случайно число в указанном диапазоне\n"
+                f"**Описание:** выбирает случайное число в указанном диапазоне\n"
                 f"**Использование:** `{p}{cmd.name} Ганица`\n"
                 f"**Примеры:** `{p}{cmd.name} 100` - случайное от `0` до `100`\n"
                 f"**->** `{p}{cmd.name} -80 80` - случайное от `-80` до `80`"
