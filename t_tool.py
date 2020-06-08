@@ -29,75 +29,12 @@ owner_ids = [
 #----------------------------------------------+
 #                  Functions                   |
 #----------------------------------------------+
-def anf(obj):
-    obj = str(obj)
-    alph = "1234567890qwertyuiopasdfghjklzxcvbnm \n\t"
-    out = ""
-    for s in obj:
-        if s.lower() not in alph:
-            out += "\\"
-        out += s
-    return out
+from functions import antiformat as anf
+from functions import has_permissions, is_int, carve_int, get_field, find_alias, display_perms, vis_aliases
 
 
 def channel_url(channel):
     return f"https://discordapp.com/channels/{channel.guild.id}/{channel.id}"
-
-
-def carve_int(string):
-    digits = [str(i) for i in range(10)]
-    out = ""
-    for s in string:
-        if s in digits:
-            out += s
-        elif out != "":
-            break
-    return int(out) if out != "" else None
-
-
-def is_int(string):
-    try:
-        int(string)
-        return True
-    except ValueError:
-        return False
-
-
-def get_field(_dict, *key_wrods, default=None):
-    if _dict is not None:
-        for kw in key_wrods:
-            if kw in _dict:
-                _dict = _dict[kw]
-            else:
-                _dict = None
-                break
-    return default if _dict is None else _dict
-
-
-def find_alias(dict_of_aliases, search):
-    out, search = None, search.lower()
-    for key in dict_of_aliases:
-        aliases = dict_of_aliases[key]
-        aliases.append(key)
-        for al in aliases:
-            if al.startswith(search):
-                out = key
-                break
-        if out is not None:
-            break
-    return out
-
-
-def has_permissions(member, perm_array):
-    if member.id in owner_ids:
-        return True
-    else:
-        perms_owned = dict(member.guild_permissions)
-        total_needed = len(perm_array)
-        for perm in perm_array:
-            if perms_owned[perm]:
-                total_needed -= 1
-        return total_needed == 0
 
 
 def from_hex(hex_code):
@@ -234,6 +171,8 @@ async def help(ctx, *, section=None):
             f"`{p}tournament-history` - история турниров\n"
             f"`{p}top` - топ участников\n"
             f"`{p}random` - случайное число\n"
+            f"`{p}embed` - рамка с текстом\n"
+            f"`{p}edit` - редактировать embed\n"
         )
     )
     await ctx.send(embed=reply)
@@ -265,55 +204,12 @@ async def test(ctx):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@client.command(aliases=["rand"])
-async def random(ctx, *, string):
-    nums = string.split()[:2]
-    all_ints = True
-    for i, num in enumerate(nums):
-        if is_int(num):
-            nums[i] = int(num)
-        else:
-            all_ints = False
-            break
-    if not all_ints:
-        p, cmd = ctx.prefix, ctx.command.name
-        reply = discord.Embed(
-            title="💥 Неверный аргумент",
-            description=f"После `{p}{cmd}` должны стоять целые числа",
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-    else:
-        if len(nums) > 1:
-            l_num, r_num = nums
-        else:
-            l_num, r_num = 0, nums[0]
-        l_num, r_num = min(l_num, r_num), max(l_num, r_num)
-        
-        if r_num - l_num > 1E12:
-            reply = discord.Embed(
-                title="💥 Превышен лимит",
-                description=f"Разница между границами не должна превышать `10 ^ 12`",
-                color=discord.Color.dark_red()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
-
-        else:
-            result = randint(l_num, r_num)
-            reply = discord.Embed(
-                title=f"🎲 Случайное число между `{l_num}` и `{r_num}`",
-                description=f"**{result}**",
-                color=from_hex("#ffdead")
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            
-            await ctx.send(embed=reply)
-
-
-@commands.cooldown(1, 1, commands.BucketType.member)
-@client.command(aliases=["r"])
+@client.command(
+    aliases=["r"],
+    help="изменяет рейтинг участника и обновляет историю турниров",
+    brief="Число Место @Участник",
+    usage="5 1 @User#1234"
+)
 async def rating(ctx, num, place, *, member_search):
     detect = Detect(ctx.guild)
     member = detect.member(member_search)
@@ -376,7 +272,11 @@ async def rating(ctx, num, place, *, member_search):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@client.command()
+@client.command(
+    help="отменяет последнее действие с участником",
+    brief="@Участник",
+    usage="@User#1234"
+)
 async def back(ctx, *, member_search):
     detect = Detect(ctx.guild)
     member = detect.member(member_search)
@@ -475,7 +375,12 @@ async def me(ctx, *, member_search=None):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@client.command(aliases=["tournament-history", "th"])
+@client.command(
+    aliases=["tournament-history", "th"],
+    help="отображает историю турниров участника",
+    brief="Страница @Участник",
+    usage="1 @User#1234"
+)
 async def tournament_history(ctx, page, *, member_search=None):
     if member_search is None:
         member = ctx.author
@@ -592,7 +497,6 @@ async def top(ctx, page="1"):
 #----------------------------------------------+
 #                   Errors                     |
 #----------------------------------------------+
-# COOLDOWN
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
@@ -610,77 +514,37 @@ async def on_command_error(ctx, error):
                 description = f"Осталось {TimeExpand(int(error.retry_after))}"
             )
         await ctx.send(embed=cool_notify)
-
-# MISSING ARGS
-@rating.error
-async def rating_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
+    
+    elif isinstance(error, commands.MissingPermissions):
+        reply = discord.Embed(
+            title="❌ Недостаточно прав",
+            description=f"Необходимые права:\n{display_perms(error.missing_perms)}",
+            color=discord.Color.dark_red()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    
+    elif isinstance(error, commands.MissingRequiredArgument):
         p = ctx.prefix
         cmd = ctx.command
         reply = discord.Embed(
             title=f"🗃 О команде `{cmd.name}`",
             description=(
-                f"**Описание:** изменяет рейтинг участника и обновляет историю турниров\n"
-                f"**Использование:** `{p}{cmd.name} Число Место @Участник`\n"
-                f"**Примеры:** `{p}{cmd.name} 5 1 @{ctx.author}`\n"
-                f">> `{p}{cmd.name} -4 10 @{ctx.author}`"
+                f"**Описание:** {cmd.help}\n"
+                f"**Использование:** `{p}{cmd.name} {cmd.brief}`\n"
+                f"**Пример:** `{p}{cmd.name} {cmd.usage}`\n\n"
+                f"{vis_aliases(cmd.aliases)}"
             )
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
 
-
-@back.error
-async def back_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        p = ctx.prefix
-        cmd = ctx.command
-        reply = discord.Embed(
-            title=f"🗃 О команде `{cmd.name}`",
-            description=(
-                f"**Описание:** отменяет последнее действие с участником\n"
-                f"**Использование:** `{p}{cmd.name} @Участник`\n"
-                f"**Примеры:** `{p}{cmd.name} @{ctx.author}`"
-            )
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-
-
-@random.error
-async def random_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        p = ctx.prefix
-        cmd = ctx.command
-        reply = discord.Embed(
-            title=f"🗃 О команде `{cmd.name}`",
-            description=(
-                f"**Описание:** выбирает случайное число в указанном диапазоне\n"
-                f"**Использование:** `{p}{cmd.name} Ганица`\n"
-                f"**Примеры:** `{p}{cmd.name} 100` - случайное от `0` до `100`\n"
-                f"**->** `{p}{cmd.name} -80 80` - случайное от `-80` до `80`"
-            )
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-
-
-@tournament_history.error
-async def tournament_history_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        p = ctx.prefix
-        cmd = ctx.command
-        reply = discord.Embed(
-            title=f"🗃 О команде `{cmd.name}`",
-            description=(
-                f"**Описание:** отображает историю турниров участника\n"
-                f"**Использование:** `{p}{cmd.name} Страница @Участник`\n"
-                f"**Примеры:** `{p}{cmd.name} 1 @{ctx.author}`\n"
-            )
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-
+#----------------------------------------------+
+#                  Loading Cogs                |
+#----------------------------------------------+
+for file_name in os.listdir("./cogs"):
+    if file_name.endswith(".py"):
+        client.load_extension(f"cogs.{file_name[:-3]}")
 
 # Running all the stuff
 client.run(bot_token)
