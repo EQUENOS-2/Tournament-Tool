@@ -161,6 +161,7 @@ class utils(commands.Cog):
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.has_permissions(administrator=True)
     @commands.command(
         help=(
             "создаёт рамку с заголовком, текстом, картинкой и т.п.\n"
@@ -183,51 +184,27 @@ class utils(commands.Cog):
     )
     async def embed(self, ctx, *, text):
         p = ctx.prefix
-        if not has_permissions(ctx.author, ["administrator"]):
-            reply = discord.Embed(
-                title="💢 Недостаточно прав",
-                description = (
-                    "Требуемые права:\n"
-                    "> Администратор"
-                ),
-                color=discord.Color.dark_red()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=str(ctx.author.avatar_url))
-            await ctx.send(embed=reply)
-        
+        emb = embed_from_string(text)
+        if emb is None:
+            pass
         else:
-            emb = embed_from_string(text)
-            if emb is None:
+            await ctx.send(embed=emb)
+            await ctx.message.delete()
+            try:
+                await ctx.author.send(f"{p}embed {antiformat(text)}")
+            except Exception:
                 pass
-            else:
-                await ctx.send(embed=emb)
-                await ctx.message.delete()
-                try:
-                    await ctx.send(f"{p}embed {antiformat(text)}")
-                except Exception:
-                    pass
     
 
     @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.has_permissions(administrator=True)
     @commands.command(
         help="редактирует мои рамки (эмбеды)",
         brief="ID_сообщения Текст_для_эмбеда",
         usage="123456789123123123 ==Заголовок== --Текст--"
     )
     async def edit(self, ctx, _id, *, text_input):
-        if not has_permissions(ctx.author, ["administrator"]):
-            reply = discord.Embed(
-                title="💢 Недостаточно прав",
-                description = (
-                    "Требуемые права:\n"
-                    "> Администратор"
-                ),
-                color=discord.Color.dark_red()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=str(ctx.author.avatar_url))
-            await ctx.send(embed=reply)
-        
-        elif not _id.isdigit():
+        if not _id.isdigit():
             reply = discord.Embed(
                 title="❌ Ошибка",
                 description=f"ID должно состоять из цифр.\nВведено: {_id}",

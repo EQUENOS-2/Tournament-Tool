@@ -204,6 +204,7 @@ async def test(ctx):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
+@commands.has_permissions(administrator=True)
 @client.command(
     aliases=["r"],
     help="изменяет рейтинг участника и обновляет историю турниров",
@@ -213,19 +214,7 @@ async def test(ctx):
 async def rating(ctx, num, place, *, member_search):
     detect = Detect(ctx.guild)
     member = detect.member(member_search)
-    if not has_permissions(ctx.author, ["administrator"]):
-        reply = discord.Embed(
-            title="⛔ Недостаточно прав",
-            description=(
-                "Необходимые права:\n"
-                "> Администратор"
-            ),
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-    
-    elif not is_int(num):
+    if not is_int(num):
         reply = discord.Embed(
             title="💥 Неверный аргумент",
             description=f"Аргумент **{num}** должен быть целым числом, например `5` или `-5`",
@@ -272,6 +261,7 @@ async def rating(ctx, num, place, *, member_search):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
+@commands.has_permissions(administrator=True)
 @client.command(
     help="отменяет последнее действие с участником",
     brief="@Участник",
@@ -280,19 +270,7 @@ async def rating(ctx, num, place, *, member_search):
 async def back(ctx, *, member_search):
     detect = Detect(ctx.guild)
     member = detect.member(member_search)
-    if not has_permissions(ctx.author, ["administrator"]):
-        reply = discord.Embed(
-            title="⛔ Недостаточно прав",
-            description=(
-                "Необходимые права:\n"
-                "> Администратор"
-            ),
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-    
-    elif member is None:
+    if member is None:
         reply = discord.Embed(
             title="💥 Участник не найден",
             description=f"По поиску **{member_search}** не найдено результатов. Увы.",
@@ -516,13 +494,16 @@ async def on_command_error(ctx, error):
         await ctx.send(embed=cool_notify)
     
     elif isinstance(error, commands.MissingPermissions):
-        reply = discord.Embed(
-            title="❌ Недостаточно прав",
-            description=f"Необходимые права:\n{display_perms(error.missing_perms)}",
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
+        if ctx.author.id not in owner_ids:
+            reply = discord.Embed(
+                title="❌ Недостаточно прав",
+                description=f"Необходимые права:\n{display_perms(error.missing_perms)}",
+                color=discord.Color.dark_red()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+        else:
+            await ctx.reinvoke()
     
     elif isinstance(error, commands.MissingRequiredArgument):
         p = ctx.prefix
