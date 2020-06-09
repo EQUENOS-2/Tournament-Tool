@@ -503,7 +503,10 @@ async def on_command_error(ctx, error):
             reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
             await ctx.send(embed=reply)
         else:
-            await ctx.reinvoke()
+            try:
+                await ctx.reinvoke()
+            except Exception as e:
+                await on_command_error(ctx, e)
     
     elif isinstance(error, commands.MissingRequiredArgument):
         p = ctx.prefix
