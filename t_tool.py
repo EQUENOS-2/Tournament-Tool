@@ -23,7 +23,8 @@ db = cluster["tournament_tool_db"]
 #----------------------------------------------+
 owner_ids = [
     301295716066787332,
-    647388176251617290
+    647388176251617290,
+    402511582128504834
 ]
 
 #----------------------------------------------+
@@ -39,6 +40,35 @@ def channel_url(channel):
 
 def from_hex(hex_code):
     return int(hex_code[1:], 16)
+
+
+def is_guild_moderator():
+    def predicate(ctx):
+        server = Server(ctx.guild)
+        author_role_ids = [r.id for r in ctx.author.roles]
+        has = False
+        for role_id in server.get_mod_roles():
+            if role_id in author_role_ids:
+                has = True
+                break
+        if has:
+            return True
+        else:
+            raise IsNotModerator()
+    return commands.check(predicate)
+
+
+def has_instance(_list, _class):
+    has = False
+    for elem in _list:
+        if isinstance(elem, _class):
+            has = True
+            break
+    return has
+
+
+class IsNotModerator(commands.CheckFailure):
+    pass
 
 
 class Detect:
@@ -57,7 +87,7 @@ class Detect:
 
 class Participant:
     def __init__(self, discord_user):
-        if "int" in str(type(discord_user)).lower():
+        if isinstance(discord_user, int):
             self.id = discord_user
         else:
             self.id = discord_user.id
@@ -100,7 +130,10 @@ class Participant:
 
 class Server:
     def __init__(self, discord_guild):
-        self.id = discord_guild.id
+        if isinstance(discord_guild, int):
+            self.id = discord_guild
+        else:
+            self.id = discord_guild.id
     
     def get_participants(self):
         collection = db["users"]
@@ -116,6 +149,20 @@ class Server:
                     trs += 1
                 out.append((result.get("_id"), pts, trs))
             return out
+
+    def reset_participants(self):
+        collection = db["users"]
+        collection.delete_many({})
+
+    def get_mod_roles(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"mod_roles": True}
+        )
+        if result is None:
+            result = {}
+        return result.get("mod_roles", [])
 
 
 class Leaderboard:
@@ -167,6 +214,7 @@ async def help(ctx, *, section=None):
             f"Подробнее о команде: `{p}команда`\n\n"
             f"`{p}rating` - изменить историю турниров\n"
             f"`{p}back` - отменить изменение\n"
+            f"`{p}clear-top` - очистить топ\n"
             f"`{p}me` - профиль\n"
             f"`{p}tournament-history` - история турниров\n"
             f"`{p}top` - топ участников\n"
@@ -204,7 +252,10 @@ async def test(ctx):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@commands.has_permissions(administrator=True)
+@commands.check_any(
+    commands.has_permissions(administrator=True),
+    is_guild_moderator()
+)
 @client.command(
     aliases=["r"],
     help="изменяет рейтинг участника и обновляет историю турниров",
@@ -261,7 +312,60 @@ async def rating(ctx, num, place, *, member_search):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@commands.has_permissions(administrator=True)
+@commands.check_any(
+    commands.has_permissions(administrator=True),
+    is_guild_moderator()
+)
+@client.command(
+    aliases=["clear-top"],
+    help="очищает список участников",
+    brief="",
+    usage=""
+)
+async def clear_top(ctx):
+    Q = discord.Embed(
+        title="❓ Вы уверены?",
+        description="Напишите `да` или `нет`"  
+    )
+    Q.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+    await ctx.send(embed=Q)
+
+    yes = ["да", "yes", "1"]
+    no = ["нет", "no", "0"]
+    try:
+        msg = await client.wait_for(
+            "message",
+            check=lambda m: m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.lower() in [*yes, *no],
+            timeout=60
+        )
+    except asyncio.TimeoutError:
+        await ctx.send(f"{ctx.author.mention}, Вы слишком долго не отвечали, сброс топа отменён")
+
+    else:
+        if msg.content.lower() in yes:
+            server = Server(ctx.guild.id)
+            server.reset_participants()
+            reply = discord.Embed(
+                title="💥 Очищено",
+                description="Топа участников больше нет. До связи.",
+                color=discord.Color.orange()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+        else:
+            reply = discord.Embed(
+                title="👌 Действие отменено",
+                description="Топ участников уцелел. Сегодня."
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+
+
+@commands.cooldown(1, 1, commands.BucketType.member)
+@commands.check_any(
+    commands.has_permissions(administrator=True),
+    is_guild_moderator()
+)
 @client.command(
     help="отменяет последнее действие с участником",
     brief="@Участник",
@@ -522,6 +626,25 @@ async def on_command_error(ctx, error):
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
+
+    elif isinstance(error, commands.CheckAnyFailure):
+        if ctx.author.id not in owner_ids:
+            if has_instance(error.errors, IsNotModerator):
+                reply = discord.Embed(
+                    title="❌ Недостаточно прав",
+                    description=f"Необходимые права:\n> Модератор",
+                    color=discord.Color.dark_red()
+                )
+                reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+                await ctx.send(embed=reply)
+            elif len(error.errors) > 0:
+                await on_command_error(ctx, error.errors[0])
+            
+        else:
+            try:
+                await ctx.reinvoke()
+            except Exception as e:
+                await on_command_error(ctx, e)
 
 #----------------------------------------------+
 #                  Loading Cogs                |
