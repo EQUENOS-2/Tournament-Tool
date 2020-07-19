@@ -2,12 +2,25 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
 import asyncio
+from pymongo import MongoClient
 from random import randint
+from datetime import datetime, timedelta
+import os
+
+db_token = str(os.environ.get("db_token"))
+
+cluster = MongoClient(db_token)
+db = cluster["tournament_tool_db"]
+
+#----------------------------------------------+
+#                 Variables                    |
+#----------------------------------------------+
+mc_memory = {}
 
 #----------------------------------------------+
 #                 Functions                    |
 #----------------------------------------------+
-from functions import has_permissions, antiformat, get_message
+from functions import has_permissions, antiformat, get_message, find_alias
 
 
 def unwrap_isolation(text, s):
@@ -91,6 +104,74 @@ def is_int(string):
         return True
     except ValueError:
         return False
+
+
+def dt_from_string(string):
+    try:
+        date, time = string.strip().split()
+        day, month = date.split(".")[:2]
+        hrs, minutes = time.split(":")[:2]
+        now = datetime.utcnow()
+        return datetime(now.year, int(month), int(day), int(hrs), int(minutes)) - timedelta(hours=3)
+    except Exception:
+        return None
+
+
+def is_guild_moderator():
+    def predicate(ctx):
+        server = Server(ctx.guild)
+        author_role_ids = [r.id for r in ctx.author.roles]
+        has = False
+        for role_id in server.get_mod_roles():
+            if role_id in author_role_ids:
+                has = True
+                break
+        if has:
+            return True
+        else:
+            raise IsNotModerator()
+    return commands.check(predicate)
+
+
+class IsNotModerator(commands.CheckFailure):
+    pass
+
+
+class Server:
+    def __init__(self, discord_guild):
+        if isinstance(discord_guild, int):
+            self.id = discord_guild
+        else:
+            self.id = discord_guild.id
+    
+    def get_participants(self):
+        collection = db["users"]
+        results = collection.find({})
+        if results is None:
+            return []
+        else:
+            out = []
+            for result in results:
+                pts, trs = 0, 0
+                for t in result.get("history", []):
+                    pts += t["rating"]
+                    trs += 1
+                out.append((result.get("_id"), pts, trs))
+            return out
+
+    def reset_participants(self):
+        collection = db["users"]
+        collection.delete_many({})
+
+    def get_mod_roles(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"mod_roles": True}
+        )
+        if result is None:
+            result = {}
+        return result.get("mod_roles", [])
 
 
 class utils(commands.Cog):
@@ -242,6 +323,65 @@ class utils(commands.Cog):
                     pass
                 await ctx.message.delete()
     
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.check_any(
+        commands.has_permissions(administrator=True),
+        is_guild_moderator()
+    )
+    @commands.command(
+        aliases=["count-messages", "cm"],
+        help="считает кол-во сообщений в указанный период времени",
+        brief="дата время - дата время",
+        usage="01.01 1:00 - 01.01 4:00"
+    )
+    async def count_messages(self, ctx, *, after_before):
+        p = ctx.prefix; cmd = str(ctx.invoked_with)
+
+        try:
+            after, before = after_before.split("-")
+            after = dt_from_string(after)
+            before = dt_from_string(before)
+
+        except Exception:
+            after = None; before = None
+
+        if None in [after, before]:
+            reply = discord.Embed(
+                title="❌ Неверный формат",
+                description=(
+                    "Вероятно Вы допустили ошибку в написании временных меток, вот шаблон:\n"
+                    f"> `{p}{cmd} 01.01 1:00 - 01.01 3:00`"
+                ),
+                color=discord.Color.dark_red()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+        
+        else:
+            if after > before:
+                before, after = after, before
+            
+            await ctx.send("🕑 Это может занять некоторое время...")
+
+            count = 0
+            auth_ids = []
+            async for m in ctx.channel.history(before=before, after=after):
+                count += 1
+                if m.author.id not in auth_ids:
+                    auth_ids.append(m.author.id)
+            
+            reply = discord.Embed(
+                title="📅 Итог подсчёта",
+                description=(
+                    f"**Период:** с `{after}` по `{before}` (`UTC`)\n\n"
+                    f"**Всего написано сообщений в указанный период:** `{count}`\n\n"
+                    f"**Всего пользователей, писавших сообщения:** `{len(auth_ids)}`"
+                ),
+                color=discord.Color.magenta()
+            )
+            reply.set_footer(text="Рассматривались сообщения только в этом канале")
+            await ctx.send(embed=reply)
+
     #----------------------------------------------+
     #                   Errors                     |
     #----------------------------------------------+

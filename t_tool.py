@@ -221,6 +221,7 @@ async def help(ctx, *, section=None):
             f"`{p}random` - случайное число\n"
             f"`{p}embed` - рамка с текстом\n"
             f"`{p}edit` - редактировать embed\n"
+            f"`{p}count-messages` - счёт сообщений за опред. период"
         )
     )
     await ctx.send(embed=reply)
