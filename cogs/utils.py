@@ -370,10 +370,11 @@ class utils(commands.Cog):
                 if m.author.id not in auth_ids:
                     auth_ids.append(m.author.id)
             
+            plus_3 = timedelta(hours=3)
             reply = discord.Embed(
                 title="📅 Итог подсчёта",
                 description=(
-                    f"**Период:** с `{after}` по `{before}` (`UTC`)\n\n"
+                    f"**Период:** с `{after + plus_3}` по `{before + plus_3}` (`UTC`)\n\n"
                     f"**Всего написано сообщений в указанный период:** `{count}`\n\n"
                     f"**Всего пользователей, писавших сообщения:** `{len(auth_ids)}`"
                 ),
