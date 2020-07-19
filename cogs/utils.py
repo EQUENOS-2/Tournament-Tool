@@ -365,7 +365,7 @@ class utils(commands.Cog):
 
             count = 0
             auth_ids = []
-            async for m in ctx.channel.history(before=before, after=after):
+            async for m in ctx.channel.history(limit=None, before=before, after=after):
                 count += 1
                 if m.author.id not in auth_ids:
                     auth_ids.append(m.author.id)
