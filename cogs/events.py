@@ -95,6 +95,32 @@ class events(commands.Cog):
             )
             await ctx.send(embed=reply)
 
+
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.command()
+    async def temptation(self, ctx):
+        role = ctx.guild.get_role(736212009288335371)
+        if role not in ctx.author.roles:
+            try:
+                await ctx.author.add_roles(role)
+            except Exception as e:
+                await ctx.send(str(e))
+            else:
+                reply = discord.Embed(
+                    title="🔮 | Получена роль",
+                    description="Тебе открыт квест",
+                    color=discord.Color.purple()
+                )
+                reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+                await ctx.send(embed=reply)
+        else:
+            reply = discord.Embed(
+                title="❌ | Не жадничай",
+                description="У тебя уже есть эта роль",
+                color=discord.Color.dark_red()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
     #----------------------------------------------+
     #                   Errors                     |
     #----------------------------------------------+
