@@ -2,11 +2,17 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
 import asyncio
+import os
 
 #----------------------------------------------+
 #                 Functions                    |
 #----------------------------------------------+
 from functions import antiformat as anf, detect
+what = str(os.environ.get("what"))
+
+def check(m):
+    return m.guild.id == 422784396425297930 and m.content == what
+
 
 class events(commands.Cog):
     def __init__(self, client):
@@ -18,6 +24,18 @@ class events(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f">> events cog is loaded")
+    
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if check(message):
+            role = message.guild.get_role(740949926783090708)
+            if role not in message.author.roles:
+                try:
+                    await message.author.add_roles(role)
+                except Exception:
+                    pass
+                await message.channel.send("Ты встал на тропу к общему благу. Помни, только сообща вы сможете найти сокровища... 👑")
 
     #----------------------------------------------+
     #                  Commands                    |
@@ -96,31 +114,6 @@ class events(commands.Cog):
             await ctx.send(embed=reply)
 
 
-    @commands.cooldown(1, 1, commands.BucketType.member)
-    @commands.command()
-    async def temptation(self, ctx):
-        role = ctx.guild.get_role(736212009288335371)
-        if role not in ctx.author.roles:
-            try:
-                await ctx.author.add_roles(role)
-            except Exception as e:
-                await ctx.send(str(e))
-            else:
-                reply = discord.Embed(
-                    title="🔮 | Получена роль",
-                    description="Тебе открыт квест",
-                    color=discord.Color.purple()
-                )
-                reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-                await ctx.send(embed=reply)
-        else:
-            reply = discord.Embed(
-                title="❌ | Не жадничай",
-                description="У тебя уже есть эта роль",
-                color=discord.Color.dark_red()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
     #----------------------------------------------+
     #                   Errors                     |
     #----------------------------------------------+
