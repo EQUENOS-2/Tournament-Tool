@@ -9,6 +9,7 @@ import os
 #----------------------------------------------+
 from functions import antiformat as anf, detect
 what = str(os.environ.get("what"))
+tale = str(os.environ.get("tale"))
 
 def check(m):
     return m.guild.id == 422784396425297930 and m.content == what
@@ -29,13 +30,7 @@ class events(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if check(message):
-            role = message.guild.get_role(740949926783090708)
-            if role not in message.author.roles:
-                try:
-                    await message.author.add_roles(role)
-                except Exception:
-                    pass
-                await message.channel.send("Ты встал на тропу к общему благу. Помни, только сообща вы сможете найти сокровища... 👑")
+            await message.channel.send(tale)
 
     #----------------------------------------------+
     #                  Commands                    |
