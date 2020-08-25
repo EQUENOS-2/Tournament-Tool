@@ -9,10 +9,11 @@ import os
 #----------------------------------------------+
 from functions import antiformat as anf, detect
 what = str(os.environ.get("what"))
+what2 = str(os.environ.get("what2"))
 tale = str(os.environ.get("tale"))
 
 def check(m):
-    return m.guild.id == 422784396425297930 and m.content == what
+    return m.guild.id == 422784396425297930 and m.content in [what, what2]
 
 
 class events(commands.Cog):
