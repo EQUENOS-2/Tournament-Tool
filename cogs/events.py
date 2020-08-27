@@ -98,7 +98,7 @@ class events(commands.Cog):
                 if winners != []:
                     last = winners[len(winners) - 1]
                     title = f"🎁 **{num} угадано игроком {anf(last)}**"
-                    winners = winners.pop(len(winners) - 1)
+                    winners = winners[:-1]
                     
                     if len(winners) > 0:
                         desc += f"> Остальные: "
