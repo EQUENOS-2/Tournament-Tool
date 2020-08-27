@@ -69,19 +69,22 @@ class events(commands.Cog):
             counter = 0
 
             async for message in channel.history(limit=100000):
-                counter += 1
-                text = message.content
-                if text != "":
-                    num = text.split(maxsplit=1)[0]
-                    if num.isdigit():
-                        num = int(num)
-                        if num in nums and str(message.author) not in nums[num]:
-                            nums[num].append(str(message.author))
-                if counter % 1000 == 0:
-                    await p_bar.edit(
-                        content=("🕑 Собираю данные с канала...\n"
-                        f"Проверено сообщений: > {counter}")
-                    )
+                try:
+                    counter += 1
+                    text = message.content
+                    if text != "":
+                        num = text.split(maxsplit=1)[0]
+                        if num.isdigit():
+                            num = int(num)
+                            if num in nums and str(message.author) not in nums[num]:
+                                nums[num].append(str(message.author))
+                    if counter % 1000 == 0:
+                        await p_bar.edit(
+                            content=("🕑 Собираю данные с канала...\n"
+                            f"Проверено сообщений: > {counter}")
+                        )
+                except Exception:
+                    pass
             if counter >= 100000:
                 await ctx.send("Исчерпан лимит сообщений")
             
