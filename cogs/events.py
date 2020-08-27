@@ -106,7 +106,7 @@ class events(commands.Cog):
                         desc = f"{desc[:-2]}"
                     else:
                         desc += "\n"
-                reply.add_field(name=f"🎁 **{num} угадано игроком {anf(last)}**", value=desc, inline=False)
+                reply.add_field(name=f"🎁 **{num} угадано игроком {anf(last)}**", value=desc[:256], inline=False)
             
             await ctx.send(embed=reply)
 
