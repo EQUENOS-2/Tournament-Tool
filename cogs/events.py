@@ -87,7 +87,6 @@ class events(commands.Cog):
             
             reply = discord.Embed(
                 titile="🏆 Победители",
-                description=desc,
                 color=discord.Color.gold()
             )
             for num in nums:
