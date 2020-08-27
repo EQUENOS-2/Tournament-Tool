@@ -85,28 +85,27 @@ class events(commands.Cog):
             if counter >= 100000:
                 await ctx.send("Исчерпан лимит сообщений")
             
-            desc = ""
-            for num in nums:
-                winners = nums[num]
-                if winners != []:
-                    last = winners[len(winners) - 1]
-                    winners = winners[:-1]
-                    desc += f"🎁 **{num} угадано игроком {anf(last)}**\n"
-                    if len(winners) > 0:
-                        desc += f"> Остальные: "
-                        for winner in winners:
-                            desc += f"{anf(winner)}, "
-                        desc = f"{desc[:-2]}\n\n"
-                    else:
-                        desc += "\n"
-            if desc == "":
-                desc = "Ни одно число не угадано"
-            
             reply = discord.Embed(
                 titile="🏆 Победители",
                 description=desc,
                 color=discord.Color.gold()
             )
+            for num in nums:
+                desc = ""
+                winners = nums[num]
+                if winners != []:
+                    last = winners[len(winners) - 1]
+                    winners = winners[:-1]
+                    
+                    if len(winners) > 0:
+                        desc += f"> Остальные: "
+                        for winner in winners:
+                            desc += f"{anf(winner)}, "
+                        desc = f"{desc[:-2]}"
+                    else:
+                        desc += "\n"
+                reply.add_field(name=f"🎁 **{num} угадано игроком {anf(last)}**", value=desc, inline=False)
+            
             await ctx.send(embed=reply)
 
 
