@@ -107,7 +107,7 @@ class events(commands.Cog):
                         desc = f"{desc[:-2]}"
                     else:
                         desc += "> Лол больше никто не угадал"
-                reply.add_field(name=title, value=desc[:256], inline=False)
+                    reply.add_field(name=title, value=desc[:256], inline=False)
             
             await ctx.send(embed=reply)
 
