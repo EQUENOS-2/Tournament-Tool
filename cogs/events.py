@@ -97,7 +97,8 @@ class events(commands.Cog):
                 winners = nums[num]
                 if winners != []:
                     last = winners[len(winners) - 1]
-                    winners = winners[:-1]
+                    title = f"🎁 **{num} угадано игроком {anf(last)}**"
+                    winners = winners.pop(len(winners) - 1)
                     
                     if len(winners) > 0:
                         desc += f"> Остальные: "
@@ -105,8 +106,8 @@ class events(commands.Cog):
                             desc += f"{anf(winner)}, "
                         desc = f"{desc[:-2]}"
                     else:
-                        desc += "\n"
-                reply.add_field(name=f"🎁 **{num} угадано игроком {anf(last)}**", value=desc[:256], inline=False)
+                        desc += "> Лол больше никто не угадал"
+                reply.add_field(name=title, value=desc[:256], inline=False)
             
             await ctx.send(embed=reply)
 
