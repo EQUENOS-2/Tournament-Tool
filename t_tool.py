@@ -205,30 +205,131 @@ async def on_ready():
 #                  Commands                    |
 #----------------------------------------------+
 @commands.cooldown(1, 1, commands.BucketType.member)
-@client.command(aliases=["h"])
-async def help(ctx, *, section=None):
+@client.command(aliases=["h"], help="узнать подробнее о каждой команде")
+async def help(ctx, *, cmd_s=None):
     p = ctx.prefix
-    reply = discord.Embed(
-        title="📖 Меню команд",
-        description=(
-            f"Подробнее о команде: `{p}команда`\n\n"
-            f"`{p}rating` - изменить историю турниров\n"
-            f"`{p}back` - отменить изменение\n"
-            f"`{p}clear-top` - очистить топ\n"
-            f"`{p}me` - профиль\n"
-            f"`{p}tournament-history` - история турниров\n"
-            f"`{p}top` - топ участников\n"
-            f"`{p}random` - случайное число\n"
-            f"`{p}embed` - рамка с текстом\n"
-            f"`{p}edit` - редактировать embed\n"
-            f"`{p}count-messages` - счёт сообщений за опред. период"
+    
+    if cmd_s is None:
+        cog_desc = f"> `{p}commands main`\n"
+        for _cog in client.cogs:
+            cog_desc += f"> `{p}commands {_cog}`\n"
+        reply = discord.Embed(
+            title="📖 Категории команд",
+            description=(
+                f"Просмотреть каждую категорию:\n{cog_desc}\n"
+                f"Подробнее о команде: `{p}help нужная команда`"
+            ),
+            color=discord.Color.blurple()
         )
-    )
-    await ctx.send(embed=reply)
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+
+    else:
+        cmd = None
+        for c in client.commands:
+            if cmd_s in [c.name, *c.aliases]:
+                cmd = c
+                break
+        
+        if cmd is None:
+            reply = discord.Embed(
+                title="🔎 | Не нашёл команду, увы",
+                description=f"У меня нет команды `{p}{cmd_s}`, может, Вы ошиблись?",
+                color=discord.Color.blurple()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+        
+        else:
+            description = "`-`"; usage = "`-`"; brief = "`-`"; aliases = "-"
+            if cmd.description != "":
+                description = cmd.description
+            if cmd.usage is not None:
+                usage = "\n> ".join( [f"`{p}{cmd} {u}`" for u in cmd.usage.split("\n")] )
+            if cmd.brief is not None:
+                brief = "\n> ".join( [f"`{p}{cmd} {u}`" for u in cmd.brief.split("\n")] )
+            if len(cmd.aliases) > 0:
+                aliases = ", ".join(cmd.aliases)
+            
+            reply = discord.Embed(
+                title = f"❓ Об аргументах `{p}{cmd}`",
+                description = (
+                    f"**Описание:** {description}\n"
+                    f"**Использование:** {usage}\n"
+                    f"**Примеры:** {brief}\n\n"
+                    f"**Синонимы:** `{aliases}`"
+                )
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+
+            try:
+                ctx.command.reset_cooldown(ctx)
+            except Exception:
+                pass
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@client.command()
+@client.command(name="commands", aliases=["cmds"], help="список всех команд из категории")
+async def _commands(ctx, *, section=None):
+    p = ctx.prefix
+    if section is None:
+        cog_desc = f"> `{p}commands main`\n"
+        for _cog in client.cogs:
+            cog_desc += f"> `{p}commands {_cog}`\n"
+            
+        reply = discord.Embed(
+            title="📖 Категории команд",
+            description=(
+                f"Просмотреть каждую категорию:\n{cog_desc}\n"
+                f"Подробнее о команде: `{p}help нужная команда`"
+            ),
+            color=discord.Color.blurple()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    
+    else:
+        cog_found = None
+        sec = section.lower()
+        if "main".startswith(sec):
+            cog_found = "main"
+            cog_commands = [c for c in client.commands if c.cog is None]
+        else:
+            for _cog in client.cogs:
+                if str(_cog).lower().startswith(sec):
+                    cog_found = _cog
+                    cog_commands = client.get_cog(_cog).get_commands()
+                    break
+        
+        if cog_found is None:
+            reply = discord.Embed(
+                title="🔎 | Не нашёл категорию, увы",
+                description=f"У меня нет категории `{section}`, может стоит проверить написание?",
+                color=discord.Color.blurple()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+        
+        else:
+            desc = ""
+            for cmd in cog_commands:
+                if cmd.help is None:
+                    cmdhelp = "[-]"
+                else:
+                    cmdhelp = cmd.help
+                desc += f"`{p}{cmd}` - {cmdhelp}\n"
+            reply = discord.Embed(
+                title=f"📁 | Категория команд `{cog_found}`",
+                description=f"Подробнее о команде: `{p}help нужная команда`\n\n{desc}",
+                color=discord.Color.blurple()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+
+
+@commands.cooldown(1, 1, commands.BucketType.member)
+@client.command(help="даже не думай")
 async def test(ctx):
     if ctx.author.id not in owner_ids:
         reply = discord.Embed(
@@ -255,14 +356,13 @@ async def test(ctx):
 @commands.cooldown(1, 1, commands.BucketType.member)
 @commands.check_any(
     commands.has_permissions(administrator=True),
-    is_guild_moderator()
-)
+    is_guild_moderator() )
 @client.command(
     aliases=["r"],
-    help="изменяет рейтинг участника и обновляет историю турниров",
+    help="изменить чей-то рейтинг",
+    description="изменяет рейтинг участника и обновляет историю турниров",
     brief="Число Место @Участник",
-    usage="5 1 @User#1234"
-)
+    usage="5 1 @User#1234" )
 async def rating(ctx, num, place, *, member_search):
     detect = Detect(ctx.guild)
     member = detect.member(member_search)
@@ -315,14 +415,13 @@ async def rating(ctx, num, place, *, member_search):
 @commands.cooldown(1, 1, commands.BucketType.member)
 @commands.check_any(
     commands.has_permissions(administrator=True),
-    is_guild_moderator()
-)
+    is_guild_moderator() )
 @client.command(
     aliases=["clear-top"],
-    help="очищает список участников",
+    help="очистить топ",
+    description="очищает список участников",
     brief="",
-    usage=""
-)
+    usage="" )
 async def clear_top(ctx):
     Q = discord.Embed(
         title="❓ Вы уверены?",
@@ -365,13 +464,12 @@ async def clear_top(ctx):
 @commands.cooldown(1, 1, commands.BucketType.member)
 @commands.check_any(
     commands.has_permissions(administrator=True),
-    is_guild_moderator()
-)
+    is_guild_moderator() )
 @client.command(
-    help="отменяет последнее действие с участником",
+    help="отменить последнее действие с участником",
+    description="отменяет последнее действие с участником",
     brief="@Участник",
-    usage="@User#1234"
-)
+    usage="@User#1234" )
 async def back(ctx, *, member_search):
     detect = Detect(ctx.guild)
     member = detect.member(member_search)
@@ -413,7 +511,7 @@ async def back(ctx, *, member_search):
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
-@client.command(aliases=["profile"])
+@client.command(aliases=["profile"], help="посмотреть профиль")
 async def me(ctx, *, member_search=None):
     if member_search is None:
         member = ctx.author
@@ -460,10 +558,10 @@ async def me(ctx, *, member_search=None):
 @commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(
     aliases=["tournament-history", "th"],
-    help="отображает историю турниров участника",
+    help="узнать историю турниров",
+    description="отображает историю турниров участника",
     brief="Страница @Участник",
-    usage="1 @User#1234"
-)
+    usage="1 @User#1234" )
 async def tournament_history(ctx, page, *, member_search=None):
     if member_search is None:
         member = ctx.author
@@ -525,7 +623,7 @@ async def tournament_history(ctx, page, *, member_search=None):
 
 
 @commands.cooldown(1, 3, commands.BucketType.member)
-@client.command()
+@client.command(help="топ участников")
 async def top(ctx, page="1"):
     if not page.isdigit():
         reply = discord.Embed(
@@ -617,13 +715,14 @@ async def on_command_error(ctx, error):
         p = ctx.prefix
         cmd = ctx.command
         reply = discord.Embed(
-            title=f"🗃 О команде `{cmd.name}`",
+            title=f"🗃 `{cmd.name}`: недостаточно аргументов",
             description=(
-                f"**Описание:** {cmd.help}\n"
+                "Как правильно?\n"
                 f"**Использование:** `{p}{cmd.name} {cmd.brief}`\n"
                 f"**Пример:** `{p}{cmd.name} {cmd.usage}`\n\n"
-                f"{vis_aliases(cmd.aliases)}"
-            )
+                f"**Подробнее об этой команде:** `{p}help {cmd}`"
+            ),
+            color=discord.Color.dark_red()
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
@@ -646,6 +745,36 @@ async def on_command_error(ctx, error):
                 await ctx.reinvoke()
             except Exception as e:
                 await on_command_error(ctx, e)
+
+    elif isinstance(error, commands.BadArgument):
+        start, middle, rest = str(error).split(maxsplit=2)
+        if '"' in middle:
+            arg = middle
+            _type = start.lower()
+            ru_msgs = {
+                "role": f"Роль {arg} не была найдена на сервере.",
+                "member": f"Участник {arg} не был найден на сервере.",
+                "user": f"Пользователь {arg} не был найден, возможно, у меня с ним нет общих серверов."
+            }
+            desc = ru_msgs.get(_type, "Кажется, введённые аргументы не соответствуют требуемому формату.")
+        else:
+            if rest.split(maxsplit=1)[0] == '"int"':
+                desc = "Укажите целое число, например `5`."
+            else:
+                desc = "Кажется, введённые аргументы не соответствуют требуемому формату."
+        reply = discord.Embed(
+            title=f"📍 | Что-то введено неправильно",
+            description=desc,
+            color=discord.Color.dark_red()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+
+    elif isinstance(error, commands.CommandNotFound):
+        pass
+
+    else:
+        print(error)
 
 #----------------------------------------------+
 #                  Loading Cogs                |

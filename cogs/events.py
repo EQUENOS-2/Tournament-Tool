@@ -16,6 +16,7 @@ def check(m):
     return m.guild.id == 422784396425297930 and m.content in [what, what2]
 
 
+
 class events(commands.Cog):
     def __init__(self, client):
         self.client = client
@@ -38,7 +39,11 @@ class events(commands.Cog):
     #----------------------------------------------+
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
-    @commands.command(help="находит подходящие числа в канале", brief="Правильные числа", usage="123 71")
+    @commands.command(
+        help="найти числа в истории сообщений канала",
+        description="находит подходящие числа в канале",
+        brief="Правильные числа",
+        usage="123 71" )
     async def find_numbers(self, ctx, channel_search, *, string):
         channel = detect.channel(ctx.guild, channel_search)
         nums = {int(w): [] for w in string.split() if w.isdigit()}
@@ -110,7 +115,6 @@ class events(commands.Cog):
                     reply.add_field(name=title, value=desc[:256], inline=False)
             
             await ctx.send(embed=reply)
-
 
     #----------------------------------------------+
     #                   Errors                     |

@@ -1,3 +1,6 @@
+from pymongo import MongoClient
+import os
+
 #----------------------------------------------+
 #                 Variables                    |
 #----------------------------------------------+
@@ -36,6 +39,9 @@ perms_tr = {
     "manage_webhooks": "Управлять вебхуками",
     "manage_emojis": "Управлять эмодзи"
 }
+db_token = str(os.environ.get("db_token"))
+cluster = MongoClient(db_token)
+db = cluster["tournament_tool_db"]
 
 #----------------------------------------------+
 #                 Functions                    |
@@ -102,13 +108,12 @@ def find_alias(dict_of_aliases, search):
 
 
 def antiformat(text):
-    alph = "qwertyuiopasdfghjklzxcvbnm1234567890 \n\t"
+    alph = "*_`|~"
     out = ""
-    for s in text:
-        if s.lower() not in alph:
-            out += "\\" + s
-        else:
-            out += s
+    for s in str(text):
+        if s in alph:
+            out += "\\"
+        out += s
     return out
 
 
@@ -172,6 +177,43 @@ class detect:
         if ID is not None:
             user = client.get_user(ID)
         return user
+
+
+class Server:
+    def __init__(self, discord_guild):
+        if isinstance(discord_guild, int):
+            self.id = discord_guild
+        else:
+            self.id = discord_guild.id
+    
+    def get_participants(self):
+        collection = db["users"]
+        results = collection.find({})
+        if results is None:
+            return []
+        else:
+            out = []
+            for result in results:
+                pts, trs = 0, 0
+                for t in result.get("history", []):
+                    pts += t["rating"]
+                    trs += 1
+                out.append((result.get("_id"), pts, trs))
+            return out
+
+    def reset_participants(self):
+        collection = db["users"]
+        collection.delete_many({})
+
+    def get_mod_roles(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"mod_roles": True}
+        )
+        if result is None:
+            result = {}
+        return result.get("mod_roles", [])
 
 
 # The end

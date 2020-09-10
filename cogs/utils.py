@@ -2,15 +2,9 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
 import asyncio
-from pymongo import MongoClient
-from random import randint
+from random import randint, shuffle
 from datetime import datetime, timedelta
 import os
-
-db_token = str(os.environ.get("db_token"))
-
-cluster = MongoClient(db_token)
-db = cluster["tournament_tool_db"]
 
 #----------------------------------------------+
 #                 Variables                    |
@@ -20,7 +14,7 @@ mc_memory = {}
 #----------------------------------------------+
 #                 Functions                    |
 #----------------------------------------------+
-from functions import has_permissions, antiformat, get_message, find_alias
+from functions import has_permissions, antiformat, get_message, find_alias, Server
 
 
 def unwrap_isolation(text, s):
@@ -137,43 +131,6 @@ class IsNotModerator(commands.CheckFailure):
     pass
 
 
-class Server:
-    def __init__(self, discord_guild):
-        if isinstance(discord_guild, int):
-            self.id = discord_guild
-        else:
-            self.id = discord_guild.id
-    
-    def get_participants(self):
-        collection = db["users"]
-        results = collection.find({})
-        if results is None:
-            return []
-        else:
-            out = []
-            for result in results:
-                pts, trs = 0, 0
-                for t in result.get("history", []):
-                    pts += t["rating"]
-                    trs += 1
-                out.append((result.get("_id"), pts, trs))
-            return out
-
-    def reset_participants(self):
-        collection = db["users"]
-        collection.delete_many({})
-
-    def get_mod_roles(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"mod_roles": True}
-        )
-        if result is None:
-            result = {}
-        return result.get("mod_roles", [])
-
-
 class utils(commands.Cog):
     def __init__(self, client):
         self.client = client
@@ -191,10 +148,10 @@ class utils(commands.Cog):
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.command(
         aliases=["rand"],
-        help="выбирает случайное число в указанном диапазоне",
+        help="случайное число",
+        description="выбирает случайное число в указанном диапазоне",
         brief="Ганица",
-        usage="-30 100"
-    )
+        usage="-30 100" )
     async def random(self, ctx, *, string):
         nums = string.split()[:2]
         all_ints = True
@@ -244,7 +201,8 @@ class utils(commands.Cog):
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
-        help=(
+        help="выслать рамку",
+        description=(
             "создаёт рамку с заголовком, текстом, картинкой и т.п.\n"
             "Что нужно писать, чтобы создавать разные части рамки:\n"
             "> `==Заголовок==` - задаёт заголовок\n"
@@ -261,8 +219,7 @@ class utils(commands.Cog):
             "==Обновление==\n"
             "--Мы добавили роль **Помощник**!--\n"
             "##gold##"
-        )
-    )
+        ) )
     async def embed(self, ctx, *, text):
         p = ctx.prefix
         emb = embed_from_string(text)
@@ -280,10 +237,10 @@ class utils(commands.Cog):
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
-        help="редактирует мои рамки (эмбеды)",
+        help="отредактировать рамку",
+        description="редактирует мои рамки (эмбеды)",
         brief="ID_сообщения Текст_для_эмбеда",
-        usage="123456789123123123 ==Заголовок== --Текст--"
-    )
+        usage="123456789123123123 ==Заголовок== --Текст--" )
     async def edit(self, ctx, _id, *, text_input):
         if not _id.isdigit():
             reply = discord.Embed(
@@ -323,17 +280,17 @@ class utils(commands.Cog):
                     pass
                 await ctx.message.delete()
     
+
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.check_any(
         commands.has_permissions(administrator=True),
-        is_guild_moderator()
-    )
+        is_guild_moderator() )
     @commands.command(
         aliases=["count-messages", "cm"],
-        help="считает кол-во сообщений в указанный период времени",
+        help="посчитать сообщения в какой-то период",
+        description="считает кол-во сообщений в указанный период времени",
         brief="дата время - дата время",
-        usage="01.01 1:00 - 01.01 4:00"
-    )
+        usage="01.01 1:00 - 01.01 4:00" )
     async def count_messages(self, ctx, *, after_before):
         p = ctx.prefix; cmd = str(ctx.invoked_with)
 
@@ -382,6 +339,33 @@ class utils(commands.Cog):
             )
             reply.set_footer(text="Рассматривались сообщения только в этом канале")
             await ctx.send(embed=reply)
+
+
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.command(
+        aliases=["choose-from-role", "role-lottery", "cfr"],
+        help="выбрать некоторый обладателей роли",
+        description="выбирает случайных обладателей указанной роли",
+        brief="Число-людей Роль",
+        usage="10 Участник" )
+    async def choose_from_role(self, ctx, num: int, *, role: discord.Role):
+        roleowners = [m for m in ctx.guild.members if role in m.roles]
+        shuffle(roleowners)
+        roleowners = roleowners[:num]
+        desc = ""
+        for i, winner in enumerate(roleowners):
+            desc += f"`{i + 1}.` {antiformat(winner)} | *`{winner.id}`*\n"
+        del roleowners
+        reply = discord.Embed(
+            title=f"🎲 | Случайно выбраны обладатели роли [{role.name}]",
+            description=desc[:2048],
+            color=discord.Color.blurple()
+        )
+        reply.set_thumbnail(url=ctx.guild.icon_url)
+        if len(desc) > 2048:
+            reply.set_footer(text="Текст мог быть обрезан из-за слишком больших размеров текста")
+        del desc
+        await ctx.send(embed=reply)
 
     #----------------------------------------------+
     #                   Errors                     |
