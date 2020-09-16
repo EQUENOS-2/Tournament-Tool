@@ -13,7 +13,10 @@ what2 = str(os.environ.get("what2"))
 tale = str(os.environ.get("tale"))
 
 def check(m):
-    return m.guild.id == 422784396425297930 and m.content in [what, what2]
+    if m.guild is not None:
+        return m.guild.id == 422784396425297930 and m.content in [what, what2]
+    else:
+        return False
 
 
 

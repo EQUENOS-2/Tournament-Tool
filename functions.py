@@ -215,5 +215,46 @@ class Server:
             result = {}
         return result.get("mod_roles", [])
 
+    def get_gameroles(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"gameroles": True}
+        )
+        if result is None:
+            result = {}
+        return result.get("gameroles", {})
+
+    def add_tournament_channel(self, channel_id: int):
+        collection = db["config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$addToSet": {"tournament_channels": channel_id}}
+        )
+    
+    def remove_tournament_channel(self, channel_id: int):
+        collection = db["config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$pull": {"tournament_channels": channel_id}}
+        )
+
+    def get_tournament_channels(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"tournament_channels": True}
+        )
+        if result is None:
+            result = {}
+        return result.get("tournament_channels", [])
+
+    def pull_tournament_channels(self, channels: list):
+        collection = db["config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$pull": {"tournament_channels": {"$in": channels}}}
+        )
+
 
 # The end

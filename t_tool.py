@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import asyncio
 import os, json
-import pymongo
 from pymongo import MongoClient
 from random import randint
 
@@ -31,7 +30,7 @@ owner_ids = [
 #                  Functions                   |
 #----------------------------------------------+
 from functions import antiformat as anf
-from functions import has_permissions, is_int, carve_int, get_field, find_alias, display_perms, vis_aliases
+from functions import has_permissions, is_int, carve_int, get_field, find_alias, display_perms, vis_aliases, Server
 
 
 def channel_url(channel):
@@ -126,43 +125,6 @@ class Participant:
             upsert=True
         ), "history", default=[])
         return None if history == [] else history[len(history) - 1]
-
-
-class Server:
-    def __init__(self, discord_guild):
-        if isinstance(discord_guild, int):
-            self.id = discord_guild
-        else:
-            self.id = discord_guild.id
-    
-    def get_participants(self):
-        collection = db["users"]
-        results = collection.find({})
-        if results is None:
-            return []
-        else:
-            out = []
-            for result in results:
-                pts, trs = 0, 0
-                for t in result.get("history", []):
-                    pts += t["rating"]
-                    trs += 1
-                out.append((result.get("_id"), pts, trs))
-            return out
-
-    def reset_participants(self):
-        collection = db["users"]
-        collection.delete_many({})
-
-    def get_mod_roles(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"mod_roles": True}
-        )
-        if result is None:
-            result = {}
-        return result.get("mod_roles", [])
 
 
 class Leaderboard:
@@ -363,53 +325,20 @@ async def test(ctx):
     description="изменяет рейтинг участника и обновляет историю турниров",
     brief="Число Место @Участник",
     usage="5 1 @User#1234" )
-async def rating(ctx, num, place, *, member_search):
-    detect = Detect(ctx.guild)
-    member = detect.member(member_search)
-    if not is_int(num):
-        reply = discord.Embed(
-            title="💥 Неверный аргумент",
-            description=f"Аргумент **{num}** должен быть целым числом, например `5` или `-5`",
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-    
-    elif not place.isdigit() or int(place) < 1:
-        reply = discord.Embed(
-            title="💥 Неверный аргумент",
-            description=f"Аргумент **{place}** должен быть целым числом больше `1`, например `3`",
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-    
-    elif member is None:
-        reply = discord.Embed(
-            title="💥 Участник не найден",
-            description=f"По поиску **{member_search}** не найдено результатов. Увы.",
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-    
-    else:
-        num = int(num)
-        place = int(place)
-
-        user = Participant(member)
-        user.update_stats(num, place)
-        reply = discord.Embed(
-            title="📀 Изменения бережно сохранены",
-            description=(
-                f"**Участник:** {member}\n"
-                f"**Изменения рейтинга:** {num} ⚡\n"
-                f"**Место в турнире:** {place} 🏅"
-            ),
-            color=from_hex("#ecd994")
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
+async def rating(ctx, num: int, place: int, *, member: discord.Member):
+    user = Participant(member)
+    user.update_stats(num, place)
+    reply = discord.Embed(
+        title="📀 Изменения бережно сохранены",
+        description=(
+            f"**Участник:** {member}\n"
+            f"**Изменения рейтинга:** {num} ⚡\n"
+            f"**Место в турнире:** {place} 🏅"
+        ),
+        color=from_hex("#ecd994")
+    )
+    reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+    await ctx.send(embed=reply)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
@@ -470,89 +399,66 @@ async def clear_top(ctx):
     description="отменяет последнее действие с участником",
     brief="@Участник",
     usage="@User#1234" )
-async def back(ctx, *, member_search):
-    detect = Detect(ctx.guild)
-    member = detect.member(member_search)
-    if member is None:
+async def back(ctx, *, member: discord.Member):
+    user = Participant(member)
+    result = user.rollback()
+
+    if result is None:
         reply = discord.Embed(
-            title="💥 Участник не найден",
-            description=f"По поиску **{member_search}** не найдено результатов. Увы.",
-            color=discord.Color.dark_red()
+            title="📦 Ошибка",
+            description=f"Последних действий с **{member}** не обнаружено"
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
     
     else:
-        user = Participant(member)
-        result = user.rollback()
-
-        if result is None:
-            reply = discord.Embed(
-                title="📦 Ошибка",
-                description=f"Последних действий с **{member}** не обнаружено"
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
-        
-        else:
-            pts, place = result["rating"], result["place"]
-            reply = discord.Embed(
-                title="♻ Изменения отменены",
-                description=(
-                    "Подробнее об отменённом действии:\n"
-                    f"> **Участник:** {member}\n"
-                    f"> **Изменения рейтинга:** {pts} ⚡\n"
-                    f"> **Место в турнире:** {place} 🏅"
-                ),
-                color=discord.Color.dark_green()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
+        pts, place = result["rating"], result["place"]
+        reply = discord.Embed(
+            title="♻ Изменения отменены",
+            description=(
+                "Подробнее об отменённом действии:\n"
+                f"> **Участник:** {member}\n"
+                f"> **Изменения рейтинга:** {pts} ⚡\n"
+                f"> **Место в турнире:** {place} 🏅"
+            ),
+            color=discord.Color.dark_green()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(aliases=["profile"], help="посмотреть профиль")
-async def me(ctx, *, member_search=None):
-    if member_search is None:
-        member = ctx.author
-    else:
-        member = Detect(ctx.guild).member(member_search)
+async def me(ctx, *, member: discord.Member=None):
     if member is None:
-        reply = discord.Embed(
-            title="💥 Участник не найден",
-            description=f"По поиску **{member_search}** не найдено результатов. Увы.",
-            color=discord.Color.dark_red()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
+        member = ctx.author
+    server = Server(ctx.guild)
+    lb = Leaderboard(server.get_participants())
+    lb.sort_values()
+    _index = lb.tuple_index(member.id)
+
+    if _index is None:
+        pos_desc = "???"
+        pts = 0
+        trs = 0
     else:
-        server = Server(ctx.guild)
-        lb = Leaderboard(server.get_participants())
-        lb.sort_values()
-        _index = lb.tuple_index(member.id)
+        pos_desc = f"#{_index + 1}"
+        pts = lb.tuples[_index][1]
+        trs = lb.tuples[_index][2]
 
-        if _index is None:
-            pos_desc = "???"
-            pts = 0
-            trs = 0
-        else:
-            pos_desc = f"#{_index + 1}"
-            pts = lb.tuples[_index][1]
-            trs = lb.tuples[_index][2]
-
-        del lb
-        reply = discord.Embed(
-            title=f"🗂 Профиль **{member}**",
-            description=(
-                f"**Очков рейтинга:** {pts} ⚡\n\n"
-                f"**Позиция в топе:** {pos_desc}\n\n"
-                f"**Сыграно турниров:** {trs} 🏆\n\n"
-                f"**История турниров:** `{ctx.prefix}tournament-history 1 {member}`"
-            ),
-            color=member.color
-        )
-        reply.set_thumbnail(url=member.avatar_url)
-        await ctx.send(embed=reply)
+    del lb
+    reply = discord.Embed(
+        title=f"🗂 Профиль **{member}**",
+        description=(
+            f"**Очков рейтинга:** {pts} ⚡\n\n"
+            f"**Позиция в топе:** {pos_desc}\n\n"
+            f"**Сыграно турниров:** {trs} 🏆\n\n"
+            f"**История турниров:** `{ctx.prefix}tournament-history 1 {member}`"
+        ),
+        color=member.color
+    )
+    reply.set_thumbnail(url=member.avatar_url)
+    await ctx.send(embed=reply)
 
 
 @commands.cooldown(1, 1, commands.BucketType.member)
@@ -562,118 +468,86 @@ async def me(ctx, *, member_search=None):
     description="отображает историю турниров участника",
     brief="Страница @Участник",
     usage="1 @User#1234" )
-async def tournament_history(ctx, page, *, member_search=None):
-    if member_search is None:
+async def tournament_history(ctx, page: int, *, member: discord.Member=None):
+    if member is None:
         member = ctx.author
-    else:
-        member = Detect(ctx.guild).member(member_search)
     
-    if not page.isdigit():
+    user = Participant(member)
+    lb = Leaderboard(user.get_history(as_tuples=True))
+    if lb.tuples == []:
         reply = discord.Embed(
-            title="💥 Неверный аргумент",
-            description=f"Аргумент **{page}** должен быть целым числом",
-            color=discord.Color.dark_red()
+            title="📖 История отсутствует",
+            description=f"Пока что у **{member}** нет активности в турнирах"
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
-    
-    elif member is None:
+    elif page < 1 or page > lb.total_pages:
         reply = discord.Embed(
-            title="💥 Участник не найден",
-            description=f"По поиску **{member_search}** не найдено результатов. Увы.",
+            title="💢 Страница не найдена",
+            description=f"Всего страниц: {lb.total_pages}",
             color=discord.Color.dark_red()
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
     else:
-        page = int(page)
-        user = Participant(member)
-        lb = Leaderboard(user.get_history(as_tuples=True))
-        if lb.tuples == []:
-            reply = discord.Embed(
-                title="📖 История отсутствует",
-                description=f"Пока что у **{member}** нет активности в турнирах"
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
-        elif page < 1 or page > lb.total_pages:
-            reply = discord.Embed(
-                title="💢 Страница не найдена",
-                description=f"Всего страниц: {lb.total_pages}",
-                color=discord.Color.dark_red()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
-        else:
-            tuples, pos = lb.get_page(page)
-            total_pages = lb.total_pages
-            del lb
-            reply = discord.Embed(
-                title=f"🏅 История турниров **{member}**",
-                color=from_hex("#ffdead")
-            )
-            for tup in tuples:
-                pos += 1
-                reply.add_field(name=f"📁 **Турнир {pos}**", value=(
-                    f"> **Место:** {tup[1]} \\🏅\n"
-                    f"> **Рейтинг:** {tup[0]} \\⚡"
-                ))
-            reply.set_footer(text=f"Стр. {page} / {total_pages}")
-            await ctx.send(embed=reply)
+        tuples, pos = lb.get_page(page)
+        total_pages = lb.total_pages
+        del lb
+        reply = discord.Embed(
+            title=f"🏅 История турниров **{member}**",
+            color=from_hex("#ffdead")
+        )
+        for tup in tuples:
+            pos += 1
+            reply.add_field(name=f"📁 **Турнир {pos}**", value=(
+                f"> **Место:** {tup[1]} \\🏅\n"
+                f"> **Рейтинг:** {tup[0]} \\⚡"
+            ))
+        reply.set_footer(text=f"Стр. {page} / {total_pages}")
+        await ctx.send(embed=reply)
 
 
 @commands.cooldown(1, 3, commands.BucketType.member)
 @client.command(help="топ участников")
-async def top(ctx, page="1"):
-    if not page.isdigit():
+async def top(ctx, page: int=1):
+    server = Server(ctx.guild)
+    lb = Leaderboard(server.get_participants())
+
+    if lb.tuples == []:
         reply = discord.Embed(
-            title="💥 Неверный аргумент",
-            description=f"Аргумент **{page}** должен быть целым числом",
+            title="📖 Топ пустует",
+            description=f"Пока что ни у кого нет очков"
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    
+    elif page > lb.total_pages:
+        reply = discord.Embed(
+            title="💢 Страница не найдена",
+            description=f"Всего страниц: {lb.total_pages}",
             color=discord.Color.dark_red()
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
     
     else:
-        page = int(page)
-        server = Server(ctx.guild)
-        lb = Leaderboard(server.get_participants())
-
-        if lb.tuples == []:
-            reply = discord.Embed(
-                title="📖 Топ пустует",
-                description=f"Пока что ни у кого нет очков"
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
+        lb.sort_values()
+        total_pages = lb.total_pages
+        tuples, pos = lb.get_page(page)
+        del lb
+        desc = ""
+        curl = channel_url(ctx.channel)
+        for i, tup in enumerate(tuples):
+            nick = f"[{client.get_user(tup[0])}]({curl})"
+            desc += f"`{pos + i + 1}.` {nick} | Рейтиг: {tup[1]} \\⚡| Турниров: {tup[2]} \\🏆\n"
         
-        elif page > lb.total_pages:
-            reply = discord.Embed(
-                title="💢 Страница не найдена",
-                description=f"Всего страниц: {lb.total_pages}",
-                color=discord.Color.dark_red()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
-        
-        else:
-            lb.sort_values()
-            total_pages = lb.total_pages
-            tuples, pos = lb.get_page(page)
-            del lb
-            desc = ""
-            curl = channel_url(ctx.channel)
-            for i, tup in enumerate(tuples):
-                nick = f"[{client.get_user(tup[0])}]({curl})"
-                desc += f"`{pos + i + 1}.` {nick} | Рейтиг: {tup[1]} \\⚡| Турниров: {tup[2]} \\🏆\n"
-            
-            reply = discord.Embed(
-                title="🏆 Топ участников",
-                description=desc,
-                color=discord.Color.gold()
-            )
-            reply.set_footer(text=f"Стр. {page} / {total_pages}")
-            await ctx.send(embed=reply)
+        reply = discord.Embed(
+            title="🏆 Топ участников",
+            description=desc,
+            color=discord.Color.gold()
+        )
+        reply.set_footer(text=f"Стр. {page} / {total_pages}")
+        await ctx.send(embed=reply)
 
 #----------------------------------------------+
 #                   Errors                     |
