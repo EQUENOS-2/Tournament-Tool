@@ -130,18 +130,20 @@ async def prepare_mass_dm(guild):
     _24_hrs = timedelta(hours=24)
     message_table = {}
     for tc in tcs:
-        async for message in guild.get_channel(tc).history(limit=10000):
-            triplet = process_text(guild, message.content, table)
-            if triplet is not None:
-                text, role, utc_game_start = triplet
-                del triplet
-                if utc_game_start >= now and now + _24_hrs > utc_game_start:
-                    if role.id not in message_table:
-                        message_table[role.id] = text
-                    else:
-                        message_table[role.id] += f"\n-------\n{text}"
-                if utc_game_start < now:
-                    break
+        try:
+            async for message in guild.get_channel(tc).history(limit=500):
+                triplet = process_text(guild, message.content, table)
+                if triplet is not None:
+                    text, role, utc_game_start = triplet
+                    del triplet
+                    if utc_game_start >= now and now + _24_hrs > utc_game_start:
+                        if role.id not in message_table:
+                            message_table[role.id] = text
+                        else:
+                            message_table[role.id] += f"\n-------\n{text}"
+        except Exception:
+            # Most likely permissions error
+            pass
     
     targets = []
     for target in guild.members:
@@ -149,7 +151,7 @@ async def prepare_mass_dm(guild):
         if subs != []:
             targets.append((target, subs))
     
-    if targets != []:
+    if targets != [] and message_table != {}:
         global mass_dms
         mass_dms[guild.id] = MassDM(guild.id, message_table, table, targets)
 
@@ -188,6 +190,7 @@ class MassDM:
                 await cut_send(member, total_text)
                 self.total_recieved += 1
             except Exception:
+                await asyncio.sleep(0.5)
                 # Updating sending speed
                 delta = (datetime.utcnow() - self.started_at).total_seconds()
                 if self.total_recieved > 0 and delta > 0:
@@ -354,6 +357,33 @@ class notifications(commands.Cog):
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
+
+
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.has_permissions(administrator=True)
+    @commands.command(
+        aliases=["preview-notifications"],
+        help="заранее просмотреть уведомления",
+        description="показывает, как будут выглядеть уведомления.",
+        usage="",
+        brief="" )
+    async def preview(self, ctx):
+        task = mass_dms.get(ctx.guild.id)
+        if task is None:
+            await ctx.send("Идёт чтение каналов...")
+            await prepare_mass_dm(ctx.guild)
+        
+        task = mass_dms.get(ctx.guild.id)
+        if task is None:
+            total_text = "Уведомлений нет"
+        else:
+            total_text = ""
+            for game, roleid in task.table.items():
+                if roleid in task.message_table:
+                    total_text += f"**__Турниры по игре {game}__**\n\n{task.message_table[roleid]}\n:arrow_up_small:\n\n"
+            if total_text == "":
+                total_text = "Уведомлений нет"
+        await cut_send(ctx.channel, total_text)
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
