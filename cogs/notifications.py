@@ -16,7 +16,7 @@ db = cluster["tournament_tool_db"]
 #----------------------------------------------+
 #                  Variables                   |
 #----------------------------------------------+
-mass_dm_start_at = time(2)  # 5 am UTC+3
+mass_dm_start_at = time(21)  # 5 am UTC+3
 
 
 mass_dms = {}
@@ -92,12 +92,12 @@ def process_text(server: discord.Guild, text: str, table: dict=None):
         line = rawline.lower().replace("*", "")
         if "начало:" in line and strtime is None:
             strtime = line.split("начало:", maxsplit=1)[1].strip()
-            new_text += rawline + "\n"
+            new_text += f"> ⏰ {rawline}\n"
         elif "игра:" in line and game is None:
             game = line.split("игра:", maxsplit=1)[1].strip()
             role_id = table.get(game, 0)
         else:
-            new_text += rawline + "\n"
+            new_text += f"> {rawline}\n"
     del text
 
     target_role = server.get_role(role_id)
@@ -123,7 +123,6 @@ async def cut_send(channel, content):
 async def prepare_mass_dm(guild):
     server = Server(guild.id)
     table = server.get_gameroles()
-    gameroles = table.values()
     tcs = server.get_tournament_channels()
 
     now = datetime.utcnow()
@@ -140,25 +139,31 @@ async def prepare_mass_dm(guild):
                         if role.id not in message_table:
                             message_table[role.id] = text
                         else:
-                            message_table[role.id] += f"\n-------\n{text}"
+                            message_table[role.id] += f"\n{text}"
         except Exception:
             # Most likely permissions error
             pass
     
     targets = []
     for target in guild.members:
-        subs = [r.id for r in target.roles if r.id in gameroles]
+        subs = [r.id for r in target.roles if r.id in message_table]
         if subs != []:
             targets.append((target, subs))
     
-    if targets != [] and message_table != {}:
+    if targets != []:
         global mass_dms
-        mass_dms[guild.id] = MassDM(guild.id, message_table, table, targets)
+        mass_dms[guild.id] = MassDM(guild, message_table, table, targets)
 
 
 class MassDM:
-    def __init__(self, server_id: int, message_table: dict, gametable: dict, targets: list):
-        self.id = server_id
+    def __init__(self, guild: discord.Guild, message_table: dict, gametable: dict, targets: list):
+        self.id = guild.id
+        lcid = Server(self.id).get_log_channel()
+        if lcid is None:
+            self.log_channel = None
+        else:
+            self.log_channel = guild.get_channel(lcid)
+        del guild
         self.targets = targets
         self.table = gametable
         self.message_table = message_table
@@ -176,6 +181,7 @@ class MassDM:
     async def launch(self):
         self.started_at = datetime.utcnow()
         for member, subs in self.targets:        # target = (Member, [role_IDs])
+            await asyncio.sleep(2)
             # Checking if process is killed
             if self.__dead:
                 self.__dead = False
@@ -184,13 +190,12 @@ class MassDM:
             total_text = ""
             for game, roleid in self.table.items():
                 if roleid in subs and roleid in self.message_table:
-                    total_text += f"**__Турниры по игре {game}__**\n\n{self.message_table[roleid]}\n:arrow_up_small:\n\n"
+                    total_text += f"🏆 **__Турниры по игре {game}__**\n\n{self.message_table[roleid]}\n\n\n"
             # Sending text
             try:
                 await cut_send(member, total_text)
                 self.total_recieved += 1
             except Exception:
-                await asyncio.sleep(0.5)
                 # Updating sending speed
                 delta = (datetime.utcnow() - self.started_at).total_seconds()
                 if self.total_recieved > 0 and delta > 0:
@@ -198,8 +203,27 @@ class MassDM:
         try:
             global mass_dms
             mass_dms.pop(self.id)
+
+            # Updating sending speed
+            delta = (datetime.utcnow() - self.started_at).total_seconds()
+            if self.total_recieved > 0 and delta > 0:
+                self.messages_per_minute = 60 * self.total_recieved / delta
+
+            # Log
+            stats = discord.Embed(
+                title="📚 | Итоги рассылки",
+                description=(
+                    f"**Получено сообщений:** `{self.total_recieved} / {self.total_targets}`\n"
+                    f"**Средняя скорость рассылки:** `{self.messages_per_minute}` сооб./мин.\n"
+                    f"**Длительность:** `{datetime.utcnow() - self.started_at}`\n"
+                ),
+                color=discord.Color.blurple()
+            )
+            await self.log_channel.send(embed=stats)
         except Exception:
             pass
+
+        return
     
     def kill(self):
         self.__dead = True
@@ -277,7 +301,26 @@ class notifications(commands.Cog):
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
+    
 
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.has_permissions(administrator=True)
+    @commands.command(
+        aliases=["log-channel", "set-log-channel", "lc"],
+        help="настроить канал логов",
+        description="настраивает канал логов для последующей отправки некоторых отчётов в него.",
+        usage="#канал",
+        brief="#турниры" )
+    async def log_channel(self, ctx, *, tc: discord.TextChannel):
+        Server(ctx.guild.id).set_log_channel(tc.id)
+        reply = discord.Embed(
+            title="📋 | Канал отчётов",
+            description=f"Настроен как <#{tc.id}>",
+            color=discord.Color.blurple()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    
 
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.check_any(
@@ -291,8 +334,10 @@ class notifications(commands.Cog):
         brief="" )
     async def mass_dm_config(self, ctx):
         server = Server(ctx.guild.id)
-        table = server.get_gameroles()
-        tc = server.get_tournament_channels()
+        data = server.load_data()
+        table = data.get("gameroles", {})
+        tc = data.get("tournament_channels", [])
+        lc = data.get("log_channel")
         
         # Visual roles
         tabledesc = ""
@@ -309,13 +354,18 @@ class notifications(commands.Cog):
                 tcdesc += f"> <#{cid}>\n"
         if tcdesc == "":
             tcdesc = "> -"
+        # Visual log channel
+        lcdesc = "> Не настроен"
+        if lc is not None:
+            lcdesc = f"> <#{lc}>"
         
         reply = discord.Embed(
             title=":gear: | Настройки массовой рассылки",
             color=discord.Color.blurple()
         )
         reply.add_field(name="Каналы с расписанием", value=tcdesc, inline=False)
-        reply.add_field(name="Таблица ролей игр", value=tabledesc)
+        reply.add_field(name="Таблица ролей игр", value=tabledesc, inline=False)
+        reply.add_field(name="Канал отчётов", value=lcdesc)
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
 
@@ -380,7 +430,7 @@ class notifications(commands.Cog):
             total_text = ""
             for game, roleid in task.table.items():
                 if roleid in task.message_table:
-                    total_text += f"**__Турниры по игре {game}__**\n\n{task.message_table[roleid]}\n:arrow_up_small:\n\n"
+                    total_text += f"🏆 **__Турниры по игре {game}__**\n\n{task.message_table[roleid]}\n\n\n"
             if total_text == "":
                 total_text = "Уведомлений нет"
         await cut_send(ctx.channel, total_text)

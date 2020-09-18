@@ -185,7 +185,12 @@ class Server:
             self.id = discord_guild
         else:
             self.id = discord_guild.id
-    
+
+    def load_data(self):
+        collection = db["config"]
+        result = collection.find_one({"_id": self.id})
+        return {} if result is None else result
+
     def get_participants(self):
         collection = db["users"]
         results = collection.find({})
@@ -229,7 +234,8 @@ class Server:
         collection = db["config"]
         collection.update_one(
             {"_id": self.id},
-            {"$addToSet": {"tournament_channels": channel_id}}
+            {"$addToSet": {"tournament_channels": channel_id}},
+            upsert=True
         )
     
     def remove_tournament_channel(self, channel_id: int):
@@ -237,6 +243,14 @@ class Server:
         collection.update_one(
             {"_id": self.id},
             {"$pull": {"tournament_channels": channel_id}}
+        )
+
+    def set_log_channel(self, channel_id: int):
+        collection = db["config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$set": {"log_channel": channel_id}},
+            upsert=True
         )
 
     def get_tournament_channels(self):
@@ -248,6 +262,14 @@ class Server:
         if result is None:
             result = {}
         return result.get("tournament_channels", [])
+
+    def get_log_channel(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"log_channel": True}
+        )
+        return None if result is None else result.get("log_channel")
 
     def pull_tournament_channels(self, channels: list):
         collection = db["config"]
