@@ -90,6 +90,12 @@ def process_text(server: discord.Guild, text: str, table: dict=None):
     new_text = ""
     for rawline in text.split("\n"):
         line = rawline.lower().replace("*", "")
+        # Removing links
+        if "https://discord.gg/" in line:
+            rawline = rawline.replace("https://discord.gg/", "")
+        elif "https://" in line:
+            rawline = rawline.replace("https://", "")
+        # Finding additional info
         if "начало:" in line and strtime is None:
             strtime = line.split("начало:", maxsplit=1)[1].strip()
             new_text += f"> ⏰ {rawline}\n"
@@ -181,11 +187,12 @@ class MassDM:
     async def launch(self):
         self.started_at = datetime.utcnow()
         for member, subs in self.targets:        # target = (Member, [role_IDs])
-            await asyncio.sleep(2)
             # Checking if process is killed
             if self.__dead:
                 self.__dead = False
                 break
+            # Waiting a bit not to get ratelimited
+            await asyncio.sleep(1)
             # Forming text
             total_text = ""
             for game, roleid in self.table.items():
@@ -196,18 +203,14 @@ class MassDM:
                 await cut_send(member, total_text)
                 self.total_recieved += 1
             except Exception:
-                # Updating sending speed
-                delta = (datetime.utcnow() - self.started_at).total_seconds()
-                if self.total_recieved > 0 and delta > 0:
-                    self.messages_per_minute = 60 * self.total_recieved / delta
-        try:
-            global mass_dms
-            mass_dms.pop(self.id)
-
+                pass
             # Updating sending speed
             delta = (datetime.utcnow() - self.started_at).total_seconds()
             if self.total_recieved > 0 and delta > 0:
                 self.messages_per_minute = 60 * self.total_recieved / delta
+        try:
+            global mass_dms
+            mass_dms.pop(self.id)
 
             # Log
             stats = discord.Embed(
