@@ -19,6 +19,12 @@ db = cluster["tournament_tool_db"]
 mass_dm_start_at = time(21)  # 5 am UTC+3
 
 
+placeholders = {
+    "||{i}||": "https://discord.gg/",
+    "||{h}||": "https://"
+}
+key_emoji = "🔎"
+
 mass_dms = {}
 
 def is_guild_moderator():
@@ -91,10 +97,9 @@ def process_text(server: discord.Guild, text: str, table: dict=None):
     for rawline in text.split("\n"):
         line = rawline.lower().replace("*", "")
         # Removing links
-        if "https://discord.gg/" in line:
-            rawline = rawline.replace("https://discord.gg/", "")
-        elif "https://" in line:
-            rawline = rawline.replace("https://", "")
+        for ph, original in placeholders.items():
+            if original in rawline:
+                rawline = rawline.replace(original, ph)
         # Finding additional info
         if "начало:" in line and strtime is None:
             strtime = line.split("начало:", maxsplit=1)[1].strip()
@@ -121,9 +126,15 @@ def process_text(server: discord.Guild, text: str, table: dict=None):
 async def cut_send(channel, content):
     lim = 2000
     size = len(content)
-    for i in range((size - 1) // lim + 1):
+    parts = (size - 1) // lim + 1
+    msg = None
+    for i in range(parts):
         lb = i * lim; ub = min((i + 1) * lim, size)
-        await channel.send(content[lb:ub])
+        if i < parts - 1:
+            await channel.send(content[lb:ub])
+        else:
+            msg = await channel.send(content[lb:ub])
+    return msg
 
 
 async def prepare_mass_dm(guild):
@@ -164,6 +175,7 @@ async def prepare_mass_dm(guild):
 class MassDM:
     def __init__(self, guild: discord.Guild, message_table: dict, gametable: dict, targets: list):
         self.id = guild.id
+        self.name = guild.name
         lcid = Server(self.id).get_log_channel()
         if lcid is None:
             self.log_channel = None
@@ -194,14 +206,15 @@ class MassDM:
             # Waiting a bit not to get ratelimited
             await asyncio.sleep(1)
             # Forming text
-            total_text = ""
+            total_text = f"🎁 | **Турниры {self.name}**\n\n"
             for game, roleid in self.table.items():
                 if roleid in subs and roleid in self.message_table:
                     total_text += f"🏆 **__Турниры по игре {game}__**\n\n{self.message_table[roleid]}\n\n\n"
             # Sending text
             try:
-                await cut_send(member, total_text)
+                msg = await cut_send(member, total_text)
                 self.total_recieved += 1
+                await msg.add_reaction(key_emoji)
             except Exception:
                 pass
             # Updating sending speed
@@ -264,6 +277,27 @@ class notifications(commands.Cog):
         for task in mass_dms.values():
             self.client.loop.create_task(task.launch())
         print("--> Notifications: mass DMs were launched")
+
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        my_id = self.client.user.id
+        if payload.guild_id is None and payload.emoji.name == key_emoji and payload.user_id != my_id:
+            user = self.client.get_user(payload.user_id)
+            channel = user.dm_channel
+            if channel is None:
+                channel = await user.create_dm()
+            message = await channel.fetch_message(payload.message_id)
+            if message.author.id == my_id:
+                text = message.content
+                changed = False
+                for ph, original in placeholders.items():
+                    if ph in text:
+                        text = text.replace(ph, original)
+                        changed = True
+                if changed:
+                    await message.edit(content=text)
+        return
 
     #----------------------------------------------+
     #                  Commands                    |
