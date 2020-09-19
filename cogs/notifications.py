@@ -210,6 +210,7 @@ class MassDM:
             for game, roleid in self.table.items():
                 if roleid in subs and roleid in self.message_table:
                     total_text += f"🏆 **__Турниры по игре {game}__**\n\n{self.message_table[roleid]}\n\n\n"
+            total_text += f"Нажатие на [{key_emoji}] сформирует ссылки"
             # Sending text
             try:
                 msg = await cut_send(member, total_text)
@@ -464,7 +465,7 @@ class notifications(commands.Cog):
         if task is None:
             total_text = "Уведомлений нет"
         else:
-            total_text = ""
+            total_text = f"🎁 **| {task.name} |** 🎁\n\n"
             for game, roleid in task.table.items():
                 if roleid in task.message_table:
                     total_text += f"🏆 **__Турниры по игре {game}__**\n\n{task.message_table[roleid]}\n\n\n"
