@@ -279,4 +279,72 @@ class Server:
         )
 
 
+class VoiceButton:
+    def __init__(self, server_id: int, button_id: int, data: dict=None):
+        """data = {limit: int, name: str}"""
+        self.server_id = server_id
+        self.id = int(button_id)
+        if data is None:
+            # Getting missing data
+            collection = db["vc_config"]
+            result = collection.find_one(
+                {"_id": self.id, f"buttons.{self.id}": {"$exists": True}},
+                projection={f"buttons.{self.id}": True}
+            )
+            if result is None:
+                data = {}
+            else:
+                data = result.get("buttons", {}).get(f"{self.id}", {})
+            del result
+        
+        self.limit = data.get("limit")
+        self.name = data.get("name")
+
+
+class VConfig:
+    def __init__(self, _id: int, projection: dict=None):
+        self.id = _id
+        collection = db["vc_config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection=projection
+        )
+        if result is None:
+            result = {}
+        self.buttons = [VoiceButton(self.id, ID, data) for ID, data in result.get("buttons", {}).items()]
+        del result
+    
+    def get(self, _id: int):
+        for vb in self.buttons:
+            if vb.id == _id:
+                return vb
+    
+    def which_creates(self, limit: int, name: str):
+        for button in self.buttons:
+            if button.name == name and button.limit == limit:
+                return button
+
+    def add_button(self, _id: int, limit: int, name: str):
+        data = {
+            "limit": limit,
+            "name": name
+        }
+        del limit, name
+        collection = db["vc_config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$set": {f"buttons.{_id}": data}},
+            upsert=True
+        )
+    
+    def remove_button(self, _id: int):
+        if self.get(_id) is not None:
+            collection = db["vc_config"]
+            collection.update_one(
+                {"_id": self.id},
+                {"$unset": {f"buttons.{_id}": ""}},
+                upsert=True
+            )
+
+
 # The end
