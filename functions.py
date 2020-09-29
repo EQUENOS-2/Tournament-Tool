@@ -312,6 +312,7 @@ class VConfig:
         if result is None:
             result = {}
         self.buttons = [VoiceButton(self.id, ID, data) for ID, data in result.get("buttons", {}).items()]
+        self.waiting_room_ids = result.get("waiting_room_ids", [])
         del result
     
     def get(self, _id: int):
@@ -345,6 +346,22 @@ class VConfig:
                 {"$unset": {f"buttons.{_id}": ""}},
                 upsert=True
             )
+
+    def add_waiting_room(self, _id: int):
+        collection = db["vc_config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$addToSet": {"waiting_room_ids": _id}},
+            upsert=True
+        )
+    
+    def remove_waiting_room(self, _id: int):
+        collection = db["vc_config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$push": {"waiting_room_ids": _id}},
+            upsert=True
+        )
 
 
 # The end
