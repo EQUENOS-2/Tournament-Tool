@@ -69,7 +69,7 @@ class voices(commands.Cog):
                     if category is None:
                         category = member.guild
                     try:
-                        ovw = {member: discord.PermissionOverwrite(mute_members=True, deafen_members=True, move_members=True)}
+                        ovw = {member: discord.PermissionOverwrite(move_members=True)}
                         room = await category.create_voice_channel(name=button.name, user_limit=button.limit, overwrites=ovw)
                         await member.move_to(room)
                         # Also checking the queue
