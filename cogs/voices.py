@@ -88,9 +88,10 @@ class voices(commands.Cog):
                     if category is None:
                         category = member.guild
                     available_vcs = [vc for vc in category.voice_channels if check1(vc)]
-                    if available_vcs != []:
+                    room = random.choice(available_vcs)
+                    if available_vcs != [] and len(room.members) < room.user_limit:
                         try:
-                            await member.move_to(random.choice(available_vcs))
+                            await member.move_to(room)
                         except:
                             pass
                     
