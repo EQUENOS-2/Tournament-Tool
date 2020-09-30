@@ -12,7 +12,7 @@ db = cluster["tournament_tool_db"]
 #----------------------------------------------+
 #                 Functions                    |
 #----------------------------------------------+
-from functions import VoiceButton, VConfig, antiformat as anf
+from functions import VoiceButton, VConfig, TemporaryVoices, antiformat as anf
 
 
 class voices(commands.Cog):
@@ -105,9 +105,82 @@ class voices(commands.Cog):
             vconf.remove_button(channel.id)
             vconf.remove_waiting_room(channel.id)
 
+            tv = TemporaryVoices(channel.guild.id)
+            owner = tv.get_owner(channel.id)
+            if owner is not None:
+                tv.remove_custom(owner, channel.id)
+
     #----------------------------------------------+
     #                  Commands                    |
     #----------------------------------------------+
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.command(
+        help="создать свой приват",
+        description="создаёт приват на указанное число людей. У создателя будут права на кик из войса и его переименование.",
+        usage="Лимит-людей Название",
+        brief="4 Комната профессионалов" )
+    async def create(self, ctx, limit: int, *, name=None):
+        isadm = ctx.author.guild_permissions.administrator
+        channels = VConfig(ctx.guild.id).room_creation_channel_ids
+
+        if ctx.channel.id not in channels and not isadm:
+            pass
+        else:
+            if not (0 < limit < 100):
+                reply = discord.Embed(
+                    title="❌ | Неверный лимит",
+                    description="Ограничение на кол-во пользователей в голосовом канале должно быть от `1` до `99`",
+                    color=discord.Color.dark_red()
+                )
+                reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+                await ctx.send(embed=reply)
+            
+            else:
+                temporooms = TemporaryVoices(ctx.guild.id, {f"custom_rooms.{ctx.author.id}": True})
+                his_rooms = temporooms.custom_rooms.get(ctx.author.id, [])
+                for i, room in enumerate(his_rooms):
+                    if ctx.guild.get_channel(room) is None:
+                        temporooms.remove_custom(ctx.author.id, room)
+                        his_rooms.pop(i)
+                        break
+                
+                if len(his_rooms) > 0 and not isadm:
+                    reply = discord.Embed(
+                        title="❌ | Превышен лимит",
+                        description="Вы можете владеть только одной приватной комнатой.",
+                        color=discord.Color.dark_red()
+                    )
+                    reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+                    await ctx.send(embed=reply)
+                
+                else:
+                    if name is None:
+                        name = f"Приват {ctx.author}"
+                    vc = None
+                    try:
+                        category = ctx.channel.category
+                        if category is None:
+                            category = ctx.guild
+                        ovw = {ctx.author: discord.PermissionOverwrite(move_members=True, manage_channels=True)}
+                        vc = await category.create_voice_channel(name=name, user_limit=limit, overwrites=ovw)
+                    except:
+                        await ctx.send("💥 Похоже, у меня нет прав на создание голосовых каналов...")
+                    if vc is not None:
+                        temporooms.add_custom(ctx.author.id, vc.id)
+
+                        reply = discord.Embed(
+                            title="🔒 | Создана комната",
+                            description=(
+                                f"**Название:** {anf(vc.name)}\n"
+                                f"**Лимит участников:** {limit}\n"
+                                f"У Вас есть права на кик участников из войса и переименование канала."
+                            ),
+                            color=discord.Color.dark_green()
+                        )
+                        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+                        await ctx.send(embed=reply)
+
+
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
@@ -177,7 +250,8 @@ class voices(commands.Cog):
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
-        aliases=["waiting-rooms", "waiting_rooms", "wrs"],
+        name="waiting-rooms",
+        aliases=["waiting_rooms", "wrs"],
         help="просмотреть комнаты ожидания",
         description="отображает полный список комнат ожидания",
         usage="",
@@ -225,6 +299,48 @@ class voices(commands.Cog):
                     f"На сервере появился голосовой канал {anf(vc.name)}, при входе в который участники будут "
                     f"случайно распределяться по приватным комнатам."
                 ),
+                color=discord.Color.dark_green()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+
+
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.has_permissions(administrator=True)
+    @commands.command(
+        aliases=["allow-room-creation", "arc", "room-creation"],
+        help="указать каналы для создания приватов при помощи команд",
+        description="настраивает каналы, в которых участники смогут создавать приваты при помощи команд.",
+        usage="#канал-1 #канал-2 ...",
+        brief="#создание-приватов" )
+    async def allow_room_creation(self, ctx, *, raw_channels):
+        channels = []
+        listed_trash = ""
+        listed_channels = ""
+        for raw in raw_channels.split()[:30]:
+            try:
+                channel = await commands.TextChannelConverter().convert(ctx, raw)
+                channels.append(channel.id)
+                listed_channels += f"> <#{channel.id}>\n"
+            except:
+                listed_trash += f"> {raw}\n"
+        if len(channels) < 1:
+            reply = discord.Embed(
+                title="❌ | Неверно указаны каналы",
+                description=f"Попробуйте тегнуть нужные каналы, напирмер <#{ctx.channel.id}>",
+                color=discord.Color.dark_red()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+        
+        else:
+            VConfig(ctx.guild.id, {"_id": True}).set_room_creation_channels(channels)
+
+            if listed_trash != "":
+                listed_channels += f"\nАргументы, не распознанные как каналы:\n{listed_trash}"
+            reply = discord.Embed(
+                title="🎧 | Перенастроены каналы для текстовой настройки",
+                description=f"Список настроенных каналов:\n{listed_channels}",
                 color=discord.Color.dark_green()
             )
             reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)

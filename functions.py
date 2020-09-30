@@ -279,6 +279,53 @@ class Server:
         )
 
 
+class TemporaryVoices:
+    def __init__(self, server_id: int, projection=None):
+        self.id = server_id
+        collection = db["vc_memory"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection=projection
+        )
+        if result is None:
+            result = {}
+        self.custom_rooms = { int(ID): rooms for ID, rooms in result.get("custom_rooms", {}).items() }
+    
+    def get_owner(self, room_id: int):
+        """Returns (OwnerID, RoomID)"""
+        for owner, rooms in self.custom_rooms.items():
+            if room_id in rooms:
+                return owner
+
+    def add_custom(self, owner_id: int, room_id: int):
+        collection = db["vc_memory"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$addToSet": {f"custom_rooms.{owner_id}": room_id}},
+            upsert=True
+        )
+    
+    def remove_custom(self, owner_id: int, room_id: int):
+        collection = db["vc_memory"]
+        if len(self.custom_rooms.get(owner_id, [])) == 1:
+            collection.update_one(
+                {"_id": self.id},
+                {"$unset": {f"custom_rooms.{owner_id}": ""}}
+            )
+        else:
+            collection.update_one(
+                {"_id": self.id},
+                {"$push": {f"custom_rooms.{owner_id}": room_id}}
+            )
+
+    def clear_owner(self, owner_id: int):
+        collection = db["vc_memory"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$unset": {f"custom_rooms.{owner_id}": ""}}
+        )
+
+
 class VoiceButton:
     def __init__(self, server_id: int, button_id: int, data: dict=None):
         """data = {limit: int, name: str}"""
@@ -313,6 +360,7 @@ class VConfig:
             result = {}
         self.buttons = [VoiceButton(self.id, ID, data) for ID, data in result.get("buttons", {}).items()]
         self.waiting_room_ids = result.get("waiting_room_ids", [])
+        self.room_creation_channel_ids = result.get("room_creation_channel_ids", [])
         del result
     
     def get(self, _id: int):
@@ -360,6 +408,14 @@ class VConfig:
         collection.update_one(
             {"_id": self.id},
             {"$push": {"waiting_room_ids": _id}},
+            upsert=True
+        )
+
+    def set_room_creation_channels(self, channel_ids: list):
+        collection = db["vc_config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$set": {"room_creation_channel_ids": channel_ids}},
             upsert=True
         )
 
