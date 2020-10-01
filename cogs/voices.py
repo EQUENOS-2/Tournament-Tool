@@ -59,6 +59,17 @@ class voices(commands.Cog):
                                     await wr.members[0].move_to(was_in)
                                 except:
                                     pass
+                # If left a custom room
+                elif len(was_in.members) < 1:
+                    temprooms = TemporaryVoices(member.guild.id)
+                    owner_id = temprooms.get_owner(was_in.id)
+                    if owner_id is not None:
+                        try:
+                            temprooms.remove_custom(owner_id, was_in.id)
+                            await was_in.delete()
+                        except:
+                            pass
+                    del temprooms
 
             # If joined a voice channel
             if now_in is not None:
@@ -72,14 +83,20 @@ class voices(commands.Cog):
                         ovw = {member: discord.PermissionOverwrite(move_members=True)}
                         room = await category.create_voice_channel(name=button.name, user_limit=button.limit, overwrites=ovw)
                         await member.move_to(room)
-                        # Also checking the queue
+                        # Also checking the queue and moving people
                         waiting_rooms = [vc for vc in category.voice_channels if check2(vc)]
-                        if waiting_rooms != []:
-                            # Moves someone to a private room
-                            wr = waiting_rooms[0]
-                            del waiting_rooms
-                            if len(wr.members) > 0:
-                                await wr.members[0].move_to(room)
+                        broke = False
+                        for wr in waiting_rooms:
+                            if not broke:
+                                for waiter in wr.members:
+                                    if len(room.members) >= room.user_limit:
+                                        broke = True
+                                        break
+                                    else:
+                                        await waiter.move_to(room)
+                            else:
+                                break
+                        del waiting_rooms
                     except:
                         pass
                 # Entered a waiting room
@@ -88,12 +105,13 @@ class voices(commands.Cog):
                     if category is None:
                         category = member.guild
                     available_vcs = [vc for vc in category.voice_channels if check1(vc)]
-                    room = random.choice(available_vcs)
-                    if available_vcs != [] and len(room.members) < room.user_limit:
-                        try:
-                            await member.move_to(room)
-                        except:
-                            pass
+                    if len(available_vcs) > 0:
+                        room = random.choice(available_vcs)
+                        if len(room.members) < room.user_limit:
+                            try:
+                                await member.move_to(room)
+                            except:
+                                pass
                     
             del vconf
 
