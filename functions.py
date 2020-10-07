@@ -185,6 +185,9 @@ class Server:
             self.id = discord_guild
         else:
             self.id = discord_guild.id
+        del discord_guild
+
+
 
     def load_data(self):
         collection = db["config"]
@@ -252,6 +255,14 @@ class Server:
             {"$set": {"log_channel": channel_id}},
             upsert=True
         )
+    
+    def set_notifications_channel(self, channel_id: int):
+        collection = db["config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$set": {"notifications_channel": channel_id}},
+            upsert=True
+        )
 
     def get_tournament_channels(self):
         collection = db["config"]
@@ -270,6 +281,14 @@ class Server:
             projection={"log_channel": True}
         )
         return None if result is None else result.get("log_channel")
+
+    def get_notifications_channel(self):
+        collection = db["config"]
+        result = collection.find_one(
+            {"_id": self.id},
+            projection={"notifications_channel": True}
+        )
+        return None if result is None else result.get("notifications_channel")
 
     def pull_tournament_channels(self, channels: list):
         collection = db["config"]

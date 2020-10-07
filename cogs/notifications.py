@@ -16,7 +16,7 @@ db = cluster["tournament_tool_db"]
 #----------------------------------------------+
 #                  Variables                   |
 #----------------------------------------------+
-mass_dm_start_at = time(21)  # 5 am UTC+3
+mass_dm_start_at = time(21)  # 00 UTC+3
 
 
 placeholders = {
@@ -25,7 +25,6 @@ placeholders = {
 }
 key_emoji = "🔎"
 
-mass_dms = {}
 
 def is_guild_moderator():
     def predicate(ctx):
@@ -46,9 +45,6 @@ def is_guild_moderator():
 class IsNotModerator(commands.CheckFailure):
     pass
 
-
-class BadMassDM(Exception):
-    pass
 
 #----------------------------------------------+
 #                 Functions                    |
@@ -96,10 +92,15 @@ def process_text(server: discord.Guild, text: str, table: dict=None):
     new_text = ""
     for rawline in text.split("\n"):
         line = rawline.lower().replace("*", "")
-        # Removing links
-        for ph, original in placeholders.items():
-            if original in rawline:
-                rawline = rawline.replace(original, ph)
+        # Triangling links
+        hi = rawline.find("https://")
+        if hi != -1 and rawline[hi - 1] != "<":
+            for i in range(hi, len(rawline)):
+                if rawline[i] == " ":
+                    break
+            if rawline[i] != " ":
+                i += 1
+            rawline = rawline[:hi] + "<" + rawline[hi:i] + ">" + rawline[i:]
         # Finding additional info
         if "начало:" in line and strtime is None:
             strtime = line.split("начало:", maxsplit=1)[1].strip()
@@ -137,7 +138,7 @@ async def cut_send(channel, content):
     return msg
 
 
-async def prepare_mass_dm(guild):
+async def prepare_notifications(guild):
     server = Server(guild.id)
     table = server.get_gameroles()
     tcs = server.get_tournament_channels()
@@ -161,90 +162,15 @@ async def prepare_mass_dm(guild):
             # Most likely permissions error
             pass
     
-    targets = []
-    for target in guild.members:
-        subs = [r.id for r in target.roles if r.id in message_table]
-        if subs != []:
-            targets.append((target, subs))
+    total_text = f"🎁 **| Турниры {guild.name} на сегодня |** 🎁\n\n"
+    for game, roleid in table.items():
+        if roleid in message_table:
+            total_text += f"🏆 **__Турниры по игре {game}__** ||<@&{roleid}>||\n\n{message_table[roleid]}\n\n\n"
+    if total_text == "":
+        total_text = "Уведомлений нет"
     
-    if targets != []:
-        global mass_dms
-        mass_dms[guild.id] = MassDM(guild, message_table, table, targets)
-
-
-class MassDM:
-    def __init__(self, guild: discord.Guild, message_table: dict, gametable: dict, targets: list):
-        self.id = guild.id
-        self.name = guild.name
-        lcid = Server(self.id).get_log_channel()
-        if lcid is None:
-            self.log_channel = None
-        else:
-            self.log_channel = guild.get_channel(lcid)
-        del guild
-        self.targets = targets
-        self.table = gametable
-        self.message_table = message_table
-        self.total_targets = len(self.targets)
-        self.total_recieved = 0
-        self.started_at = None
-        self.messages_per_minute = 22
-        self.__dead = False
+    return total_text
     
-    @property
-    def estimated_end(self):
-        et_mins = (self.total_targets - self.total_recieved) / self.messages_per_minute
-        return self.started_at + timedelta(minutes=et_mins)
-    
-    async def launch(self):
-        self.started_at = datetime.utcnow()
-        for member, subs in self.targets:        # target = (Member, [role_IDs])
-            # Checking if process is killed
-            if self.__dead:
-                self.__dead = False
-                break
-            # Waiting a bit not to get ratelimited
-            await asyncio.sleep(1)
-            # Forming text
-            total_text = f"🎁 | **Турниры {self.name}**\n\n"
-            for game, roleid in self.table.items():
-                if roleid in subs and roleid in self.message_table:
-                    total_text += f"🏆 **__Турниры по игре {game}__**\n\n{self.message_table[roleid]}\n\n\n"
-            total_text += f"Нажатие на [{key_emoji}] сформирует ссылки"
-            # Sending text
-            try:
-                msg = await cut_send(member, total_text)
-                self.total_recieved += 1
-                await msg.add_reaction(key_emoji)
-            except Exception:
-                pass
-            # Updating sending speed
-            delta = (datetime.utcnow() - self.started_at).total_seconds()
-            if self.total_recieved > 0 and delta > 0:
-                self.messages_per_minute = 60 * self.total_recieved / delta
-        try:
-            global mass_dms
-            mass_dms.pop(self.id)
-
-            # Log
-            stats = discord.Embed(
-                title="📚 | Итоги рассылки",
-                description=(
-                    f"**Получено сообщений:** `{self.total_recieved} / {self.total_targets}`\n"
-                    f"**Средняя скорость рассылки:** `{self.messages_per_minute}` сооб./мин.\n"
-                    f"**Длительность:** `{datetime.utcnow() - self.started_at}`\n"
-                ),
-                color=discord.Color.blurple()
-            )
-            await self.log_channel.send(embed=stats)
-        except Exception:
-            pass
-
-        return
-    
-    def kill(self):
-        self.__dead = True
-
 
 class notifications(commands.Cog):
     def __init__(self, client):
@@ -271,13 +197,19 @@ class notifications(commands.Cog):
             try:
                 if result.get("tournament_channels", []) is not None:
                     guild = self.client.get_guild(result["_id"])
-                    await prepare_mass_dm(guild)
+                    channel = guild.get_channel(result.get("notifications_channel", 0))
+                    if channel is not None:
+                        text = await prepare_notifications(guild)
+                        try:
+                            await channel.purge()
+                        except:
+                            pass
+                        msg = await cut_send(channel, text)
+                        await msg.publish()
             except Exception:
                 pass
         
-        for task in mass_dms.values():
-            self.client.loop.create_task(task.launch())
-        print("--> Notifications: mass DMs were launched")
+        print("--> Notifications: sent")
 
 
     @commands.Cog.listener()
@@ -365,17 +297,18 @@ class notifications(commands.Cog):
         commands.has_permissions(administrator=True),
         is_guild_moderator() )
     @commands.command(
-        aliases=["mass-dm-config", "mdc", "md-config"],
-        help="текущие настройки массовой рассылки",
-        description="показывает настройки массовой рассылки расписания.",
+        aliases=["notifications-config", "n-conf"],
+        help="текущие настройки уведомлений",
+        description="показывает настройки уведомлений о расписании.",
         usage="",
         brief="" )
-    async def mass_dm_config(self, ctx):
+    async def notofocations_config(self, ctx):
         server = Server(ctx.guild.id)
         data = server.load_data()
         table = data.get("gameroles", {})
         tc = data.get("tournament_channels", [])
-        lc = data.get("log_channel")
+        lc = data.get("notifications_channel")
+        del data
         
         # Visual roles
         tabledesc = ""
@@ -392,59 +325,23 @@ class notifications(commands.Cog):
                 tcdesc += f"> <#{cid}>\n"
         if tcdesc == "":
             tcdesc = "> -"
-        # Visual log channel
+        # Visual "notifications channel
         lcdesc = "> Не настроен"
         if lc is not None:
             lcdesc = f"> <#{lc}>"
         
         reply = discord.Embed(
-            title=":gear: | Настройки массовой рассылки",
+            title=":gear: | Настройки уведомлений",
             color=discord.Color.blurple()
         )
         reply.add_field(name="Каналы с расписанием", value=tcdesc, inline=False)
         reply.add_field(name="Таблица ролей игр", value=tabledesc, inline=False)
-        reply.add_field(name="Канал отчётов", value=lcdesc)
+        reply.add_field(name="Канал для уведомлений", value=lcdesc)
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
 
         # Deleting ghost data
         server.pull_tournament_channels(ghost_channels)
-
-
-    @commands.cooldown(1, 1, commands.BucketType.member)
-    @commands.has_permissions(administrator=True)
-    @commands.command(
-        aliases=["mass-dms"],
-        help="статус активных рассылок",
-        description="отображает данные об активных рассылках.",
-        usage="",
-        brief="" )
-    async def tasks(self, ctx):
-        _3_hrs = timedelta(hours=3)
-        task = mass_dms.get(ctx.guild.id)
-        if task is None:
-            desc = "Активных рассылок нет."
-        else:
-            if task.started_at is not None:
-                startdesc = f"**Началось в:** `{task.started_at + _3_hrs} (МСК)`"
-            else:
-                startdesc = f"**Начнётся в:** `{next_time(mass_dm_start_at) + _3_hrs}` (МСК)"
-            enddesc = "-"
-            if task.started_at is not None:
-                enddesc = str(task.estimated_end + _3_hrs)
-            desc = (
-                f"{startdesc}\n"
-                f"**Отправлено сообщений:** `{task.total_recieved} / {task.total_targets}`\n"
-                f"**Скорость отправки:** `{task.messages_per_minute} сооб./мин.`\n"
-                f"**Примерное окончание:** `{enddesc} (МСК)`\n"
-            )
-        reply = discord.Embed(
-            title="📡 | Статус рассылок",
-            description=desc,
-            color=discord.Color.blurple()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
@@ -456,92 +353,71 @@ class notifications(commands.Cog):
         usage="",
         brief="" )
     async def preview(self, ctx):
-        task = mass_dms.get(ctx.guild.id)
-        if task is None:
-            await ctx.send("Идёт чтение каналов...")
-            await prepare_mass_dm(ctx.guild)
+        await ctx.send("Идёт чтение каналов...")
+        text = await prepare_notifications(ctx.guild)
         
-        task = mass_dms.get(ctx.guild.id)
-        if task is None:
-            total_text = "Уведомлений нет"
-        else:
-            total_text = f"🎁 **| {task.name} |** 🎁\n\n"
-            for game, roleid in task.table.items():
-                if roleid in task.message_table:
-                    total_text += f"🏆 **__Турниры по игре {game}__**\n\n{task.message_table[roleid]}\n\n\n"
-            if total_text == "":
-                total_text = "Уведомлений нет"
-        await cut_send(ctx.channel, total_text)
+        await cut_send(ctx.channel, text)
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
-        aliases=["read-tournament-channels", "read-t-channels", "read-tchannel", "read-tc"],
-        help="заранее сформировать уведомления",
-        description="просматривает все каналы с расписаниями и формирует уведомления.",
-        usage="",
-        brief="" )
-    async def read_tournament_channels(self, ctx):
-        await ctx.send("Идёт чтение каналов...")
-        await prepare_mass_dm(ctx.guild)
-        reply = discord.Embed(
-            title="📥 | Уведомления сформированы",
-            description=f"Статус задач: `{ctx.prefix}tasks`",
-            color=discord.Color.blurple()
-        )
-        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-        await ctx.send(embed=reply)
-
-
-    @commands.cooldown(1, 1, commands.BucketType.member)
-    @commands.has_permissions(administrator=True)
-    @commands.command(
-        aliases=["force-mass-dms", "force-md", "fmd"],
+        aliases=["force-notifications", "force-notif", "fn"],
         help="экстренная рассылка",
-        description="начать рассылку раньше установленного срока.",
+        description="выслать уведомления раньше установленного срока.",
         usage="",
         brief="" )
-    async def force_mass_dms(self, ctx):
+    async def force_notifications(self, ctx):
         await ctx.send("Идёт чтение каналов...")
-        await prepare_mass_dm(ctx.guild)
-        task = mass_dms.get(ctx.guild.id)
+        text = await prepare_notifications(ctx.guild)
+
         reply = discord.Embed(
-            title="📥 | Уведомления сформированы, начинаю рассылку",
-            description=f"Статус задач: `{ctx.prefix}tasks`",
+            title="📥 | Каналы прочитаны",
+            description=f"Выслал уведомления в новостной канал",
             color=discord.Color.blurple()
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
-        await task.launch()
+
+        ncid = Server(ctx.guild.id).get_notifications_channel()
+        channel = ctx.guild.get_channel(ncid)
+        if channel is not None:
+            try:
+                await channel.purge()
+            except:
+                pass
+            msg = await cut_send(channel, text)
+            try:
+                await msg.publish()
+            except:
+                pass
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
-        aliases=["kill-tasks"],
-        help="прервать рассылку",
-        description="прерывает рассылку на любом её этапе.",
-        usage="",
-        brief="" )
-    async def kill_tasks(self, ctx):
-        task = mass_dms.get(ctx.guild.id)
-        if task is None:
+        aliases=["notifications-channel", "notif-channel", "nc"],
+        help="настроить канал для уведомлений",
+        description="настраивает канал для публикации уведомлений. Чтобы сбросить настройку, используйте команду без аргументов.",
+        usage="#канал",
+        brief="#турниры-сегодня" )
+    async def notifications_channel(self, ctx, channel: discord.TextChannel=None):
+        if channel is None:
+            Server(ctx.guild.id).set_notifications_channel(None)
             reply = discord.Embed(
-                title="❌ | Активных рассылок нет",
-                description=f"Убедитесь в этом сами: `{ctx.prefix}tasks`",
-                color=discord.Color.dark_red()
+                title="🗑 | Канал для уведомлений сброшен",
+                description=f"Ок чё",
+                color=discord.Color.blurple()
             )
             reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
             await ctx.send(embed=reply)
        
         else:
-            task.kill()
-            mass_dms.pop(ctx.guild.id)
+            Server(ctx.guild.id).set_notifications_channel(channel.id)
             reply = discord.Embed(
-                title="🗑 | Рассылка прервана",
-                description=f"Задачи сняты, проверьте `{ctx.prefix}tasks`",
-                color=discord.Color.blue()
+                title="📢 | Настроен канал для уведомлений",
+                description=f"Теперь уведомления будут приходить в <#{channel.id}>",
+                color=discord.Color.blurple()
             )
             reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
             await ctx.send(embed=reply)
