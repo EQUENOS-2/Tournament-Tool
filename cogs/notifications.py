@@ -158,19 +158,24 @@ async def prepare_notifications(guild):
                     text, gametuple, utc_game_start = triplet
                     del triplet
                     if utc_game_start >= now and now + _24_hrs > utc_game_start:
-                        if gametuple.channel not in message_table:
+                        if gametuple not in message_table:
                             if gametuple.game == anygame:
-                                gname = "другим играм"
-                            else:
-                                gname = gametuple.game
-                            message_table[gametuple.channel] = f"🏆 **| Турниры по __{gname}__ на сегодня**\n\n{text}"
+                                gametuple.game = "другим играм"
+                            message_table[gametuple] = [(utc_game_start, text)]
                         else:
-                            message_table[gametuple.channel] += f"\n{text}"
+                            message_table[gametuple].append((utc_game_start, text))
         except Exception:
             # Most likely permissions error
             pass
     
-    return message_table
+    final_message_table = {}
+    for gametuple, pairs in message_table.items():
+        text = f"🏆 **| Турниры по __{gametuple.game}__ на сегодня**\n\n"
+        for _, granula in sorted(pairs, key=lambda p: p[0]):
+            text += f"\n{granula}"
+        final_message_table[gametuple.channel] = text
+    del message_table
+    return final_message_table
     
 
 class notifications(commands.Cog):
