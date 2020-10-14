@@ -653,7 +653,7 @@ async def on_command_error(ctx, error):
         pass
 
     else:
-        raise error
+        print(error)
 
 #----------------------------------------------+
 #                  Loading Cogs                |

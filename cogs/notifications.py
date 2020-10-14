@@ -305,10 +305,7 @@ class notifications(commands.Cog):
                 tcdesc += f"> <#{cid}>\n"
         if tcdesc == "":
             tcdesc = "> -"
-        # Visual notifications channel
-        lcdesc = "> Не настроен"
-        if server.log_channel is not None:
-            lcdesc = f"> <#{server.log_channel}>"
+        
         
         reply = discord.Embed(
             title=":gear: | Настройки уведомлений",
@@ -316,7 +313,6 @@ class notifications(commands.Cog):
         )
         reply.add_field(name="Каналы с расписанием", value=tcdesc, inline=False)
         reply.add_field(name="Каналы для уведомлений по играм", value=tabledesc, inline=False)
-        reply.add_field(name="Канал для уведомлений", value=lcdesc)
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
 
@@ -335,7 +331,7 @@ class notifications(commands.Cog):
     async def preview(self, ctx):
         await ctx.send("Идёт чтение каналов...")
         pairs = await prepare_notifications(ctx.guild)
-        for _, text in pairs:
+        for text in pairs.values():
             await cut_send(ctx.channel, text)
 
 
