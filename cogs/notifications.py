@@ -286,16 +286,16 @@ class notifications(commands.Cog):
         description="показывает настройки уведомлений о расписании.",
         usage="",
         brief="" )
-    async def notofocations_config(self, ctx):
+    async def notifications_config(self, ctx):
         server = Server(ctx.guild.id)
         
         # Visual GameTable
         tabledesc = ""
         for gt in server.gametable:
-            if gt.game == anygame: gt.game = "Остальные игры"
+            if gt.game == anygame:
+                gt.game = "Остальные игры"
             tabledesc += f"> {gt.game}: <#{gt.channel}>\n"
-        if tabledesc == "":
-            tabledesc = "> -"
+        if tabledesc == "": tabledesc = "> -"
         # Visual channels
         tcdesc = ""; ghost_channels = []
         for cid in server.tournament_channels:
