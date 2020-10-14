@@ -113,10 +113,10 @@ def dt_from_string(string):
 
 def is_guild_moderator():
     def predicate(ctx):
-        server = Server(ctx.guild)
+        mod_roles = Server(ctx.guild.id, projection={"mod_roles": True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
         has = False
-        for role_id in server.get_mod_roles():
+        for role_id in mod_roles:
             if role_id in author_role_ids:
                 has = True
                 break

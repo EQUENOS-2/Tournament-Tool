@@ -10,20 +10,19 @@ from random import randint
 #----------------------------------------------+
 bot_token = str(os.environ.get("bot_token"))
 db_token = str(os.environ.get("db_token"))
-prefix = "+"
+prefix = ".."
 
 client = commands.Bot(prefix)
 client.remove_command("help")
 cluster = MongoClient(db_token)
 db = cluster["tournament_tool_db"]
 
+
 #----------------------------------------------+
 #                  Variables                   |
 #----------------------------------------------+
 owner_ids = [
-    301295716066787332,
-    647388176251617290,
-    402511582128504834
+    301295716066787332
 ]
 
 #----------------------------------------------+
@@ -31,6 +30,8 @@ owner_ids = [
 #----------------------------------------------+
 from functions import antiformat as anf
 from functions import has_permissions, is_int, carve_int, get_field, find_alias, display_perms, vis_aliases, Server
+from custom_converters import IntConverter
+
 
 
 def channel_url(channel):
@@ -43,10 +44,10 @@ def from_hex(hex_code):
 
 def is_guild_moderator():
     def predicate(ctx):
-        server = Server(ctx.guild)
+        mod_roles = Server(ctx.guild.id, projection={"mod_roles", True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
         has = False
-        for role_id in server.get_mod_roles():
+        for role_id in mod_roles:
             if role_id in author_role_ids:
                 has = True
                 break
@@ -292,7 +293,7 @@ async def _commands(ctx, *, section=None):
 
 @commands.cooldown(1, 1, commands.BucketType.member)
 @client.command(help="даже не думай")
-async def test(ctx):
+async def test(ctx, num: IntConverter=None):
     if ctx.author.id not in owner_ids:
         reply = discord.Embed(
             title="⛔ Недостаточно прав",
@@ -305,6 +306,12 @@ async def test(ctx):
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
     else:
+        # categ = ctx.guild.get_channel(566638204036448257)
+        # role = ctx.guild.get_role(681453567516606490)
+        # ovw = categ.overwrites()
+        # ovw[role] = discord.PermissionOverwrite(manage_permissions=True)
+        # await categ.edit(overwrites=ovw)
+
         word = "хуест"
         _word = ""
         for s in word:
@@ -432,7 +439,7 @@ async def back(ctx, *, member: discord.Member):
 async def me(ctx, *, member: discord.Member=None):
     if member is None:
         member = ctx.author
-    server = Server(ctx.guild)
+    server = Server(ctx.guild.id, pre_result={})
     lb = Leaderboard(server.get_participants())
     lb.sort_values()
     _index = lb.tuple_index(member.id)
@@ -510,7 +517,7 @@ async def tournament_history(ctx, page: int, *, member: discord.Member=None):
 @commands.cooldown(1, 3, commands.BucketType.member)
 @client.command(help="топ участников")
 async def top(ctx, page: int=1):
-    server = Server(ctx.guild)
+    server = Server(ctx.guild.id, pre_result={})
     lb = Leaderboard(server.get_participants())
 
     if lb.tuples == []:
@@ -621,21 +628,19 @@ async def on_command_error(ctx, error):
                 await on_command_error(ctx, e)
 
     elif isinstance(error, commands.BadArgument):
-        start, middle, rest = str(error).split(maxsplit=2)
-        if '"' in middle:
-            arg = middle
-            _type = start.lower()
-            ru_msgs = {
-                "role": f"Роль {arg} не была найдена на сервере.",
-                "member": f"Участник {arg} не был найден на сервере.",
-                "user": f"Пользователь {arg} не был найден, возможно, у меня с ним нет общих серверов."
-            }
-            desc = ru_msgs.get(_type, "Кажется, введённые аргументы не соответствуют требуемому формату.")
-        else:
-            if rest.split(maxsplit=1)[0] == '"int"':
-                desc = "Укажите целое число, например `5`."
-            else:
-                desc = "Кажется, введённые аргументы не соответствуют требуемому формату."
+        print(error)
+        obj, arg, rest = str(error).split('"', maxsplit=2)
+        obj = obj.strip().lower()
+        del rest
+        ru_msgs = {
+            "role": f"Роль **{arg}** не была найдена на сервере.",
+            "member": f"Участник **{arg}** не был найден на сервере.",
+            "user": f"Пользователь **{arg}** не был найден, возможно, у меня с ним нет общих серверов.",
+            "channel": f"Канал **{arg}** не был найден на сервере.",
+            "int": f"Аргумент **{arg}** должен быть целым числом, например `5`."
+        }
+        desc = ru_msgs.get(obj, "Кажется, введённые аргументы не соответствуют требуемому формату.")
+        
         reply = discord.Embed(
             title=f"📍 | Что-то введено неправильно",
             description=desc,
@@ -648,7 +653,7 @@ async def on_command_error(ctx, error):
         pass
 
     else:
-        print(error)
+        raise error
 
 #----------------------------------------------+
 #                  Loading Cogs                |
@@ -657,5 +662,5 @@ for file_name in os.listdir("./cogs"):
     if file_name.endswith(".py"):
         client.load_extension(f"cogs.{file_name[:-3]}")
 
-# Running all the stuff
+# Running
 client.run(bot_token)

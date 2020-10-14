@@ -17,21 +17,15 @@ db = cluster["tournament_tool_db"]
 #                  Variables                   |
 #----------------------------------------------+
 mass_dm_start_at = time(21)  # 00 UTC+3
-
-
-placeholders = {
-    "||{i}||": "https://discord.gg/",
-    "||{h}||": "https://"
-}
-key_emoji = "🔎"
+anygame = "[anygame]"
 
 
 def is_guild_moderator():
     def predicate(ctx):
-        server = Server(ctx.guild)
+        mod_roles = Server(ctx.guild, {"mod_roles": True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
         has = False
-        for role_id in server.get_mod_roles():
+        for role_id in mod_roles:
             if role_id in author_role_ids:
                 has = True
                 break
@@ -60,12 +54,13 @@ def next_time(time, now=datetime.utcnow()):
 
 
 def dt_from_string(string: str):
-    pair = string.split(maxsplit=1)
-    if len(pair) < 2:
+    """Reads the time as UTC+3 and returns UTC"""
+    triplet = string.split(maxsplit=2)
+    if len(triplet) <= 1:
         return None
     else:
-        ymd, hm = pair
-        del pair
+        ymd, hm = triplet[0], triplet[1]
+        del triplet
         ymd = ymd.split(".", maxsplit=2)
         hm = hm.split(":", maxsplit=1)
         if len(ymd) < 3 or len(hm) < 2:
@@ -82,13 +77,9 @@ def dt_from_string(string: str):
                 return None
 
 
-def process_text(server: discord.Guild, text: str, table: dict=None):
-    """Returns: (Text, Role, UTC)"""
-    if table is None:
-        table = Server(server.id).get_gameroles()
-    table = {kw.lower(): value for kw, value in table.items()}
+def process_text(server: discord.Guild, text: str, table: list):
+    """Returns: (Text, GameTuple, UTC)"""
     strtime = None; game = None
-    role_id = 0
     new_text = ""
     for rawline in text.split("\n"):
         line = rawline.lower().replace("*", "")
@@ -106,22 +97,33 @@ def process_text(server: discord.Guild, text: str, table: dict=None):
             strtime = line.split("начало:", maxsplit=1)[1].strip()
             new_text += f"> ⏰ {rawline}\n"
         elif "игра:" in line and game is None:
-            game = line.split("игра:", maxsplit=1)[1].strip()
-            role_id = table.get(game, 0)
+            game = line.split("игра:", maxsplit=1)[1].strip().lower()
+            if game not in [gt.game.lower() for gt in table]:
+                new_text += f"> 🎮 {rawline}\n"
         else:
             new_text += f"> {rawline}\n"
     del text
 
-    target_role = server.get_role(role_id)
-    if strtime is None:
-        utc_game_start = None
-    else:
-        utc_game_start = dt_from_string(strtime)
-    
-    if utc_game_start is None or target_role is None:
+    if strtime is None or game is None:
         return None
-    else:
-        return (new_text, target_role, utc_game_start)
+    utc_game_start = dt_from_string(strtime)
+    if utc_game_start is None:
+        return None
+    
+    target_gametuple = None
+    default_gametuple = None
+    for gt in table:
+        if gt.game.lower() == game:
+            target_gametuple = gt
+            break
+        elif gt.game == anygame:
+            default_gametuple = gt
+
+    if target_gametuple is None:
+        if default_gametuple is None:
+            return None
+        target_gametuple = default_gametuple
+    return (new_text, target_gametuple, utc_game_start)
 
 
 async def cut_send(channel, content):
@@ -139,9 +141,11 @@ async def cut_send(channel, content):
 
 
 async def prepare_notifications(guild):
-    server = Server(guild.id)
-    table = server.get_gameroles()
-    tcs = server.get_tournament_channels()
+    """Returns a dictionary {channel_id: text_to_send}"""
+    server = Server(guild.id, {"gametable": True, "tournament_channels": True})
+    table = server.gametable
+    tcs = server.tournament_channels
+    del server
 
     now = datetime.utcnow()
     _24_hrs = timedelta(hours=24)
@@ -151,25 +155,22 @@ async def prepare_notifications(guild):
             async for message in guild.get_channel(tc).history(limit=500):
                 triplet = process_text(guild, message.content, table)
                 if triplet is not None:
-                    text, role, utc_game_start = triplet
+                    text, gametuple, utc_game_start = triplet
                     del triplet
                     if utc_game_start >= now and now + _24_hrs > utc_game_start:
-                        if role.id not in message_table:
-                            message_table[role.id] = text
+                        if gametuple.channel not in message_table:
+                            if gametuple.game == anygame:
+                                gname = "другим играм"
+                            else:
+                                gname = gametuple.game
+                            message_table[gametuple.channel] = f"🏆 **| Турниры по __{gname}__ на сегодня**\n\n{text}"
                         else:
-                            message_table[role.id] += f"\n{text}"
+                            message_table[gametuple.channel] += f"\n{text}"
         except Exception:
             # Most likely permissions error
             pass
     
-    total_text = f"🎁 **| Турниры {guild.name} на сегодня |** 🎁\n\n"
-    for game, roleid in table.items():
-        if roleid in message_table:
-            total_text += f"🏆 **__Турниры по игре {game}__** ||<@&{roleid}>||\n\n{message_table[roleid]}\n\n\n"
-    if total_text == "":
-        total_text = "Уведомлений нет"
-    
-    return total_text
+    return message_table
     
 
 class notifications(commands.Cog):
@@ -194,43 +195,26 @@ class notifications(commands.Cog):
         collection = db["config"]
         results = collection.find({})
         for result in results:
+            result = Server(result["_id"], pre_result=result)
             try:
-                if result.get("tournament_channels", []) is not None:
-                    guild = self.client.get_guild(result["_id"])
-                    channel = guild.get_channel(result.get("notifications_channel", 0))
-                    if channel is not None:
-                        text = await prepare_notifications(guild)
-                        try:
-                            await channel.purge()
-                        except:
-                            pass
-                        msg = await cut_send(channel, text)
-                        await msg.publish()
+                if result.tournament_channels != []:
+                    guild = self.client.get_guild(result.id)
+                    if guild is not None:
+                        pairs = await prepare_notifications(guild)
+                        for channel_id, text in pairs.items():
+                            if channel_id is not None:
+                                channel = guild.get_channel(channel_id)
+                                try:
+                                    await channel.purge()
+                                except:
+                                    pass
+                                msg = await cut_send(channel, text)
+                                await msg.publish()
             except Exception:
                 pass
         
         print("--> Notifications: sent")
 
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
-        my_id = self.client.user.id
-        if payload.guild_id is None and payload.emoji.name == key_emoji and payload.user_id != my_id:
-            user = self.client.get_user(payload.user_id)
-            channel = user.dm_channel
-            if channel is None:
-                channel = await user.create_dm()
-            message = await channel.fetch_message(payload.message_id)
-            if message.author.id == my_id:
-                text = message.content
-                changed = False
-                for ph, original in placeholders.items():
-                    if ph in text:
-                        text = text.replace(ph, original)
-                        changed = True
-                if changed:
-                    await message.edit(content=text)
-        return
 
     #----------------------------------------------+
     #                  Commands                    |
@@ -297,45 +281,41 @@ class notifications(commands.Cog):
         commands.has_permissions(administrator=True),
         is_guild_moderator() )
     @commands.command(
-        aliases=["notifications-config", "n-conf"],
+        aliases=["notifications-config", "nconf", "nc"],
         help="текущие настройки уведомлений",
         description="показывает настройки уведомлений о расписании.",
         usage="",
         brief="" )
     async def notofocations_config(self, ctx):
         server = Server(ctx.guild.id)
-        data = server.load_data()
-        table = data.get("gameroles", {})
-        tc = data.get("tournament_channels", [])
-        lc = data.get("notifications_channel")
-        del data
         
-        # Visual roles
+        # Visual GameTable
         tabledesc = ""
-        for kw, rid in table.items():
-            tabledesc += f"> {kw}: <@&{rid}>\n"
+        for gt in server.gametable:
+            if gt.game == anygame: gt.game = "Остальные игры"
+            tabledesc += f"> {gt.game}: <#{gt.channel}>\n"
         if tabledesc == "":
             tabledesc = "> -"
         # Visual channels
         tcdesc = ""; ghost_channels = []
-        for cid in tc:
+        for cid in server.tournament_channels:
             if ctx.guild.get_channel(cid) is None:
                 ghost_channels.append(cid)
             else:
                 tcdesc += f"> <#{cid}>\n"
         if tcdesc == "":
             tcdesc = "> -"
-        # Visual "notifications channel
+        # Visual notifications channel
         lcdesc = "> Не настроен"
-        if lc is not None:
-            lcdesc = f"> <#{lc}>"
+        if server.log_channel is not None:
+            lcdesc = f"> <#{server.log_channel}>"
         
         reply = discord.Embed(
             title=":gear: | Настройки уведомлений",
             color=discord.Color.blurple()
         )
         reply.add_field(name="Каналы с расписанием", value=tcdesc, inline=False)
-        reply.add_field(name="Таблица ролей игр", value=tabledesc, inline=False)
+        reply.add_field(name="Каналы для уведомлений по играм", value=tabledesc, inline=False)
         reply.add_field(name="Канал для уведомлений", value=lcdesc)
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
@@ -354,9 +334,9 @@ class notifications(commands.Cog):
         brief="" )
     async def preview(self, ctx):
         await ctx.send("Идёт чтение каналов...")
-        text = await prepare_notifications(ctx.guild)
-        
-        await cut_send(ctx.channel, text)
+        pairs = await prepare_notifications(ctx.guild)
+        for _, text in pairs:
+            await cut_send(ctx.channel, text)
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
@@ -369,54 +349,69 @@ class notifications(commands.Cog):
         brief="" )
     async def force_notifications(self, ctx):
         await ctx.send("Идёт чтение каналов...")
-        text = await prepare_notifications(ctx.guild)
+        pairs = await prepare_notifications(ctx.guild)
 
+        desc = ""
+        for channel_id, text in pairs.items():
+            if channel_id is not None:
+                channel = ctx.guild.get_channel(channel_id)
+                if channel is not None: desc += f"> <#{channel_id}>\n"
+                try:
+                    await channel.purge()
+                except:
+                    pass
+                msg = await cut_send(channel, text)
+                try:
+                    await msg.publish()
+                except:
+                    pass
+        
+        if desc == "": desc = "> -"
         reply = discord.Embed(
-            title="📥 | Каналы прочитаны",
-            description=f"Выслал уведомления в новостной канал",
+            title="📥 | Уведомления высланы досрочно",
+            description=f"Их можно просмотреть в одном из каналов:\n{desc}",
             color=discord.Color.blurple()
         )
         reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
         await ctx.send(embed=reply)
 
-        ncid = Server(ctx.guild.id).get_notifications_channel()
-        channel = ctx.guild.get_channel(ncid)
-        if channel is not None:
-            try:
-                await channel.purge()
-            except:
-                pass
-            msg = await cut_send(channel, text)
-            try:
-                await msg.publish()
-            except:
-                pass
-
 
     @commands.cooldown(1, 1, commands.BucketType.member)
     @commands.has_permissions(administrator=True)
     @commands.command(
-        aliases=["notifications-channel", "notif-channel", "nc"],
-        help="настроить канал для уведомлений",
-        description="настраивает канал для публикации уведомлений. Чтобы сбросить настройку, используйте команду без аргументов.",
-        usage="#канал",
-        brief="#турниры-сегодня" )
-    async def notifications_channel(self, ctx, channel: discord.TextChannel=None):
-        if channel is None:
-            Server(ctx.guild.id).set_notifications_channel(None)
-            reply = discord.Embed(
-                title="🗑 | Канал для уведомлений сброшен",
-                description=f"Ок чё",
-                color=discord.Color.blurple()
-            )
-            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
-            await ctx.send(embed=reply)
-       
+        aliases=["add-game-channel", "addgamechannel", "agc"],
+        help="настроить канал для уведомлений по конкретной игре",
+        description="настраивает канал для публикации уведомлений по указанной игре.",
+        usage="#канал Название Игры",
+        brief="#brawlstars-сегодня Brawl Stars" )
+    async def add_game_channel(self, ctx, channel: discord.TextChannel, *, gamename):
+        Server(ctx.guild.id, pre_result={}).add_game_channel(gamename, channel.id)
+        reply = discord.Embed(
+            title="📢 | Настроен канал для уведомлений",
+            description=f"Теперь уведомления по игре **{gamename}** будут приходить в <#{channel.id}>",
+            color=discord.Color.blurple()
+        )
+        reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=reply)
+    
+
+    @commands.cooldown(1, 1, commands.BucketType.member)
+    @commands.has_permissions(administrator=True)
+    @commands.command(
+        aliases=["remove-game-channel", "remgamechannel", "rgc"],
+        help="сбросить канал для уведомлений по конкретной игре",
+        description="сбрасывает канал для публикации уведомлений по указанной игре.",
+        usage="Название игры",
+        brief="Brawl Stars" )
+    async def remove_game_channel(self, ctx, *, gamename):
+        server = Server(ctx.guild.id, {"gametable": True})
+        if gamename not in [gt.game for gt in server.gametable]:
+            await ctx.send(f"❌ | Расписание по игре **{gamename}** не отсылается ни в один канал.\nПроверьте: `{ctx.prefix}nc`")
         else:
-            Server(ctx.guild.id).set_notifications_channel(channel.id)
+            server.remove_game_channel(gamename)
             reply = discord.Embed(
-                title="📢 | Настроен канал для уведомлений",
-                description=f"Теперь уведомления будут приходить в <#{channel.id}>",
+                title="📢 | Сброшен канал для уведомлений",
+                description=f"Теперь уведомления по игре **{gamename}** не будут приходить.",
                 color=discord.Color.blurple()
             )
             reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)

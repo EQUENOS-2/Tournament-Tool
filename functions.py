@@ -179,20 +179,28 @@ class detect:
         return user
 
 
+class GameTuple:
+    def __init__(self, raw_gametuple: tuple):
+        self.game = raw_gametuple[0]
+        self.channel = raw_gametuple[1]
+        del raw_gametuple
+
+
 class Server:
-    def __init__(self, discord_guild):
-        if isinstance(discord_guild, int):
-            self.id = discord_guild
+    def __init__(self, server_id: int, projection=None, pre_result: dict=None):
+        self.id = server_id
+        if pre_result is None:
+            collection = db["config"]
+            result = collection.find_one({"_id": self.id}, projection=projection)
+            if result is None: result = {}
         else:
-            self.id = discord_guild.id
-        del discord_guild
-
-
-
-    def load_data(self):
-        collection = db["config"]
-        result = collection.find_one({"_id": self.id})
-        return {} if result is None else result
+            result = pre_result
+            del pre_result
+        self.gametable = [GameTuple(rgt) for rgt in result.get("gametable", {}).items()]
+        self.tournament_channels = result.get("tournament_channels", [])
+        self.mod_roles = result.get("mod_roles", [])
+        self.log_channel = result.get("log_channel")
+        self.notifications_channel = result.get("notifications_channel")
 
     def get_participants(self):
         collection = db["users"]
@@ -213,26 +221,6 @@ class Server:
         collection = db["users"]
         collection.delete_many({})
 
-    def get_mod_roles(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"mod_roles": True}
-        )
-        if result is None:
-            result = {}
-        return result.get("mod_roles", [])
-
-    def get_gameroles(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"gameroles": True}
-        )
-        if result is None:
-            result = {}
-        return result.get("gameroles", {})
-
     def add_tournament_channel(self, channel_id: int):
         collection = db["config"]
         collection.update_one(
@@ -248,6 +236,13 @@ class Server:
             {"$pull": {"tournament_channels": channel_id}}
         )
 
+    def pull_tournament_channels(self, channels: list):
+        collection = db["config"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$pull": {"tournament_channels": {"$in": channels}}}
+        )
+
     def set_log_channel(self, channel_id: int):
         collection = db["config"]
         collection.update_one(
@@ -256,45 +251,19 @@ class Server:
             upsert=True
         )
     
-    def set_notifications_channel(self, channel_id: int):
+    def add_game_channel(self, game: str, channel_id: int):
         collection = db["config"]
         collection.update_one(
             {"_id": self.id},
-            {"$set": {"notifications_channel": channel_id}},
+            {"$set": {f"gametable.{game}": channel_id}},
             upsert=True
         )
-
-    def get_tournament_channels(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"tournament_channels": True}
-        )
-        if result is None:
-            result = {}
-        return result.get("tournament_channels", [])
-
-    def get_log_channel(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"log_channel": True}
-        )
-        return None if result is None else result.get("log_channel")
-
-    def get_notifications_channel(self):
-        collection = db["config"]
-        result = collection.find_one(
-            {"_id": self.id},
-            projection={"notifications_channel": True}
-        )
-        return None if result is None else result.get("notifications_channel")
-
-    def pull_tournament_channels(self, channels: list):
+    
+    def remove_game_channel(self, game: str):
         collection = db["config"]
         collection.update_one(
             {"_id": self.id},
-            {"$pull": {"tournament_channels": {"$in": channels}}}
+            {"$unset": {f"gametable.{game}": ""}}
         )
 
 
