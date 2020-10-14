@@ -395,8 +395,7 @@ class VConfig:
         collection = db["vc_config"]
         collection.update_one(
             {"_id": self.id},
-            {"$push": {"waiting_room_ids": _id}},
-            upsert=True
+            {"$push": {"waiting_room_ids": _id}}
         )
 
     def set_room_creation_channels(self, channel_ids: list):

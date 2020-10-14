@@ -120,8 +120,10 @@ class voices(commands.Cog):
     async def on_guild_channel_delete(self, channel):
         if isinstance(channel, discord.VoiceChannel):
             vconf = VConfig(channel.guild.id)
-            vconf.remove_button(channel.id)
-            vconf.remove_waiting_room(channel.id)
+            if channel.id in [bt.id for bt in vconf.buttons]:
+                vconf.remove_button(channel.id)
+            if channel.id in vconf.waiting_room_ids:
+                vconf.remove_waiting_room(channel.id)
 
             tv = TemporaryVoices(channel.guild.id)
             owner = tv.get_owner(channel.id)
