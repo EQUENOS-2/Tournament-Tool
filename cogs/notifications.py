@@ -22,7 +22,7 @@ anygame = "[anygame]"
 
 def is_guild_moderator():
     def predicate(ctx):
-        mod_roles = Server(ctx.guild, {"mod_roles": True}).mod_roles
+        mod_roles = Server(ctx.guild.id, {"mod_roles": True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
         has = False
         for role_id in mod_roles:
@@ -295,7 +295,8 @@ class notifications(commands.Cog):
             if gt.game == anygame:
                 gt.game = "Остальные игры"
             tabledesc += f"> {gt.game}: <#{gt.channel}>\n"
-        if tabledesc == "": tabledesc = "> -"
+        if tabledesc == "":
+            tabledesc = "> -"
         # Visual channels
         tcdesc = ""; ghost_channels = []
         for cid in server.tournament_channels:

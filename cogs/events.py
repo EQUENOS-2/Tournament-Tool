@@ -30,12 +30,6 @@ class events(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f">> events cog is loaded")
-    
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if check(message):
-            await message.channel.send(tale)
 
     #----------------------------------------------+
     #                  Commands                    |
