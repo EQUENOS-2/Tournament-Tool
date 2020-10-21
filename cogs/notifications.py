@@ -79,9 +79,11 @@ def dt_from_string(string: str):
 
 def process_text(server: discord.Guild, text: str, table: list):
     """Returns: (Text, GameTuple, UTC)"""
+    del server
     strtime = None; game = None
     new_text = ""
     for rawline in text.split("\n"):
+        rawline = rawline.replace("@", "@ ")
         line = rawline.lower().replace("*", "")
         # Triangling links
         hi = rawline.find("https://")
@@ -97,9 +99,12 @@ def process_text(server: discord.Guild, text: str, table: list):
             strtime = line.split("начало:", maxsplit=1)[1].strip()
             new_text += f"> ⏰ {rawline}\n"
         elif "игра:" in line and game is None:
-            game = line.split("игра:", maxsplit=1)[1].strip().lower()
-            if game not in [gt.game.lower() for gt in table]:
-                new_text += f"> 🎮 {rawline}\n"
+            try:
+                game = line.split("игра:", maxsplit=1)[1].strip().lower()
+                if game not in [gt.game.lower() for gt in table]:
+                    new_text += f"> 🎮 {rawline}\n"
+            except:
+                pass
         else:
             new_text += f"> {rawline}\n"
     del text
