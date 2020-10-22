@@ -28,9 +28,9 @@ owner_ids = [
 #----------------------------------------------+
 #                  Functions                   |
 #----------------------------------------------+
-from functions import antiformat as anf
+from functions import antiformat as anf, EmergencyExit
 from functions import has_permissions, is_int, carve_int, get_field, find_alias, display_perms, vis_aliases, Server
-from custom_converters import IntConverter
+from custom_converters import IntConverter, IsNotInt
 
 
 
@@ -628,21 +628,19 @@ async def on_command_error(ctx, error):
                 await on_command_error(ctx, e)
 
     elif isinstance(error, commands.BadArgument):
-        print(error)
-        obj, arg, rest = str(error).split('"', maxsplit=2)
-        obj = obj.strip().lower()
-        del rest
-        ru_msgs = {
-            "role": f"Роль **{arg}** не была найдена на сервере.",
-            "member": f"Участник **{arg}** не был найден на сервере.",
-            "user": f"Пользователь **{arg}** не был найден, возможно, у меня с ним нет общих серверов.",
-            "channel": f"Канал **{arg}** не был найден на сервере.",
-            "int": f"Аргумент **{arg}** должен быть целым числом, например `5`."
-        }
-        desc = ru_msgs.get(obj, "Кажется, введённые аргументы не соответствуют требуемому формату.")
-        
+        if isinstance(error, commands.MemberNotFound):
+            desc = f"Участник **{anf(error.argument)}** не был найден."
+        elif isinstance(error, commands.ChannelNotFound):
+            desc = f"Канал **{anf(error.argument)}** не был найден."
+        elif isinstance(error, commands.RoleNotFound):
+            desc = f"Роль **{anf(error.argument)}** не была найдена."
+        elif isinstance(error, IsNotInt):
+            desc = f"Аргумент **{error.argument}** должен быть целым числом, например `5`."
+        else:
+            desc = "Введённый аргумент не соответствует требуемому формату."
+
         reply = discord.Embed(
-            title=f"📍 | Что-то введено неправильно",
+            title="❌ | Что-то введено неправильно...",
             description=desc,
             color=discord.Color.dark_red()
         )
@@ -650,6 +648,9 @@ async def on_command_error(ctx, error):
         await ctx.send(embed=reply)
 
     elif isinstance(error, commands.CommandNotFound):
+        pass
+    
+    elif isinstance(error, EmergencyExit):
         pass
 
     else:

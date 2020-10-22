@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 import os
+from discord.ext.commands import CommandError
 
 #----------------------------------------------+
 #                 Variables                    |
@@ -44,6 +45,13 @@ cluster = MongoClient(db_token)
 db = cluster["tournament_tool_db"]
 
 #----------------------------------------------+
+#                 Exceptions                   |
+#----------------------------------------------+
+class EmergencyExit(CommandError):
+    pass
+
+
+#----------------------------------------------+
 #                 Functions                    |
 #----------------------------------------------+
 def display_perms(missing_perms):
@@ -72,6 +80,22 @@ def carve_int(string):
         elif out != "":
             break
     return int(out) if out != "" else None
+
+
+def is_command(text, prefix, client):
+    cmds = client.commands
+    del client
+    word = text.split(maxsplit=1)
+    if len(word) < 1:
+        return False
+    word = word[0]
+    if not word.startswith(prefix):
+        return False
+    word = word[len(prefix):]
+    for cmd in cmds:
+        if word == cmd.name or word in cmd.aliases:
+            return True
+    return False
 
 
 def is_int(string):
@@ -178,6 +202,10 @@ class detect:
             user = client.get_user(ID)
         return user
 
+
+#----------------------------------------------+
+#                 DB models                    |
+#----------------------------------------------+
 
 class GameTuple:
     def __init__(self, raw_gametuple: tuple):
@@ -405,6 +433,56 @@ class VConfig:
             {"$set": {"room_creation_channel_ids": channel_ids}},
             upsert=True
         )
+
+
+#----------------------------------------------+
+#             Treats Temporary                 |
+#----------------------------------------------+
+
+
+class TreatUser:
+    def __init__(self, _id: int, treats: int=0):
+        self.id = int(_id)
+        self.treats = treats
+
+
+class TreatStorage:
+    def __init__(self, server_id: int, projection=None, extra_filters={}, request_data=True):
+        self.id = server_id
+        if request_data:
+            collection = db["treats"]
+            result = collection.find_one({"_id": self.id, **extra_filters}, projection=projection)
+            if result is None: result = {}
+        else:
+            result = {}
+        self.__users = result.get("users", {})
+        self.user_count = len(self.__users)
+    @property
+    def users(self):
+        if isinstance(self.__users, dict):
+            self.__users = [TreatUser(_id_, treats) for _id_, treats in self.__users.items()]
+        return self.__users
+
+    def add_treats(self, user_id: int, amount: int):
+        collection = db["treats"]
+        collection.update_one(
+            {"_id": self.id},
+            {"$inc": {f"users.{user_id}": amount}},
+            upsert=True
+        )
+    
+    def get_user(self, user_id: int):
+        if isinstance(self.__users, dict):
+            for _id_, treats in self.__users.items():
+                if int(_id_) == user_id:
+                    return TreatUser(_id_, treats)
+        for user in self.__users:
+            if user.id == user_id:
+                return user
+
+    def reset(self):
+        collection = db["treats"]
+        collection.update_one({"_id": self.id}, {"$unset": {"users": ""}})
 
 
 # The end
