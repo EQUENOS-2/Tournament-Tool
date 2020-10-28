@@ -31,6 +31,10 @@ class voices(commands.Cog):
     async def on_voice_state_update(self, member, before, after):
         was_in = before.channel
         now_in = after.channel
+        
+        if was_in == now_in:
+            return # In case user just turned on/off micro or camera
+        
         if was_in is not None or now_in is not None:
             vconf = VConfig(member.guild.id)
             check1 = lambda vc: len(vc.members) < vc.user_limit and vconf.which_creates(vc.user_limit, vc.name) is not None
