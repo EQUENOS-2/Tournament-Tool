@@ -12,7 +12,8 @@ bot_token = str(os.environ.get("bot_token"))
 db_token = str(os.environ.get("db_token"))
 prefix = "+"
 
-client = commands.Bot(prefix)
+intents = discord.Intents.all()
+client = commands.Bot(command_prefix=prefix, intents=intents)
 client.remove_command("help")
 cluster = MongoClient(db_token)
 db = cluster["tournament_tool_db"]
