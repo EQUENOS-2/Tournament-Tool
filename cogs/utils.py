@@ -336,7 +336,7 @@ class utils(commands.Cog):
             for i, pair in enumerate(sorted(list(auth_ids.items()), key=lambda p: p[1], reverse=True)):
                 ID, num = pair
                 member = ctx.guild.get_member(ID)
-                desc += f"{i + 1}. Тег: {antiformat(member)}\tID: {ID}\tСообщений: {num}\n"
+                desc += f"{i + 1}. Тег: {member}\tID: {ID}\tСообщений: {num}\n"
                 usercount += 1
             del auth_ids
             
