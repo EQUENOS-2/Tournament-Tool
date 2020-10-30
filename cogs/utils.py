@@ -5,6 +5,7 @@ import asyncio
 from random import randint, shuffle
 from datetime import datetime, timedelta
 import os
+from io import BytesIO
 
 #----------------------------------------------+
 #                 Variables                    |
@@ -321,24 +322,34 @@ class utils(commands.Cog):
             await ctx.send("🕑 Это может занять некоторое время...")
 
             count = 0
-            auth_ids = []
+            auth_ids = {}
             async for m in ctx.channel.history(limit=None, before=before, after=after):
                 count += 1
                 if m.author.id not in auth_ids:
-                    auth_ids.append(m.author.id)
+                    auth_ids[m.author.id] = 1
+                else:
+                    auth_ids[m.author.id] += 1
             
             plus_3 = timedelta(hours=3)
-            reply = discord.Embed(
-                title="📅 Итог подсчёта",
-                description=(
-                    f"**Период:** с `{after + plus_3}` по `{before + plus_3}` (`МСК`)\n\n"
-                    f"**Всего написано сообщений в указанный период:** `{count}`\n\n"
-                    f"**Всего пользователей, писавших сообщения:** `{len(auth_ids)}`"
-                ),
-                color=discord.Color.magenta()
+            usercount = 0
+            desc = ""
+            for i, pair in enumerate(sorted(list(auth_ids.items()), key=lambda p: p[1], reverse=True)):
+                ID, num = pair
+                member = ctx.guild.get_member(ID)
+                desc += f"{i + 1}. Тег: {antiformat(member)}\tID: {ID}\tСообщений: {num}\n"
+                usercount += 1
+            del auth_ids
+            
+            btext = BytesIO(desc.encode("utf-8"))
+            reply = discord.Embed(color=discord.Color.magenta())
+            reply.title="📅 Итог подсчёта"
+            reply.description=(
+                f"**Период:** с `{after + plus_3}` по `{before + plus_3}` (`МСК`)\n\n"
+                f"**Всего написано сообщений в указанный период:** `{count}`\n\n"
+                f"**Всего пользователей, писавших сообщения:** `{usercount}`"
             )
             reply.set_footer(text="Рассматривались сообщения только в этом канале")
-            await ctx.send(embed=reply)
+            await ctx.send(embed=reply, file=discord.File(btext, "user_data.txt"))
 
 
     @commands.cooldown(1, 1, commands.BucketType.member)
