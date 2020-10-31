@@ -117,18 +117,13 @@ def process_text(server: discord.Guild, text: str, table: list):
         return None
     
     target_gametuple = None
-    default_gametuple = None
     for gt in table:
         if gt.game.lower() == game:
             target_gametuple = gt
             break
-        elif gt.game == anygame:
-            default_gametuple = gt
 
     if target_gametuple is None:
-        if default_gametuple is None:
-            return None
-        target_gametuple = default_gametuple
+        return None
     return (new_text, target_gametuple, utc_game_start)
 
 
@@ -164,8 +159,6 @@ async def prepare_notifications(guild):
                     text, gametuple, utc_game_start = triplet
                     del triplet
                     if utc_game_start >= now and now + _24_hrs > utc_game_start:
-                        if gametuple.game == anygame:
-                            gametuple.game = "другим играм"
                         if gametuple not in message_table:
                             message_table[gametuple] = [(utc_game_start, text)]
                         else:
@@ -176,6 +169,7 @@ async def prepare_notifications(guild):
     
     final_message_table = {}
     for gametuple, pairs in message_table.items():
+        if gametuple.game == anygame: gametuple.game = "другим играм"
         text = f"🏆 **| Турниры по __{gametuple.game}__ на сегодня**\n\n"
         for _, granula in sorted(pairs, key=lambda p: p[0]):
             text += f"\n{granula}"
