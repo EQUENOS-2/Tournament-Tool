@@ -163,9 +163,9 @@ async def prepare_notifications(guild):
                     text, gametuple, utc_game_start = triplet
                     del triplet
                     if utc_game_start >= now and now + _24_hrs > utc_game_start:
+                        if gametuple.game == anygame:
+                            gametuple.game = "другим играм"
                         if gametuple not in message_table:
-                            if gametuple.game == anygame:
-                                gametuple.game = "другим играм"
                             message_table[gametuple] = [(utc_game_start, text)]
                         else:
                             message_table[gametuple].append((utc_game_start, text))
