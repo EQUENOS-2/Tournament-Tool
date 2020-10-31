@@ -103,6 +103,7 @@ def process_text(server: discord.Guild, text: str, table: list):
                 game = line.split("игра:", maxsplit=1)[1].strip().lower()
                 if game not in [gt.game.lower() for gt in table]:
                     new_text += f"> 🎮 {rawline}\n"
+                    game = anygame
             except:
                 pass
         else:
@@ -169,7 +170,7 @@ async def prepare_notifications(guild):
                             message_table[gametuple] = [(utc_game_start, text)]
                         else:
                             message_table[gametuple].append((utc_game_start, text))
-        except Exception:
+        except:
             # Most likely permissions error
             pass
     
