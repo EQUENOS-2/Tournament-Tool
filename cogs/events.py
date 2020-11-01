@@ -173,7 +173,7 @@ class events(commands.Cog):
         interv = 15
         ts = TreatStorage(ctx.guild.id)
         total_pages = 1
-        if ts.user_count > 0: total_pages = (ts.user_count - 1) * interv + 1
+        if ts.user_count > 0: total_pages = (ts.user_count - 1) // interv + 1
         # Check page
         if not (0 < page <= total_pages):
             page = total_pages
