@@ -506,7 +506,7 @@ class utils(commands.Cog):
                     break
             if ans is None:
                 ans = choice(yesno)
-            await ctx.send(ans)
+        await ctx.send(ans)
 
     #----------------------------------------------+
     #                   Errors                     |
