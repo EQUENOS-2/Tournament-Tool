@@ -492,13 +492,21 @@ class utils(commands.Cog):
 
         ans = None
         query = query.lower()
-        for qw in qwords:
-            if qw in query:
-                ans = choice(qwords[qw])
-                break
+        words = query.split()
+        if "или" in words:
+            i = words.index("или")
+            if 0 < i < len(words) - 1:
+                left = words[i - 1]
+                right = words[i + 1]
+                ans = f"{choice([left, right])}. " + choice(["Выбрать было непросто.", "Очевидно же", "Невпопад, да?(", "Как завещал Жак Фреско."])
         if ans is None:
-            ans = choice(yesno)
-        await ctx.send(ans)
+            for qw in qwords:
+                if qw in query:
+                    ans = choice(qwords[qw])
+                    break
+            if ans is None:
+                ans = choice(yesno)
+            await ctx.send(ans)
 
     #----------------------------------------------+
     #                   Errors                     |
