@@ -496,12 +496,11 @@ class utils(commands.Cog):
         if "или" in words:
             i = words.index("или")
             if 0 < i < len(words) - 1:
-                left = words[i - 1]
-                right = words[i + 1]
-                if right[-1:] in "?!.,:;":
-                    right = right[:-1]
-                left = left[0].upper() + left[1:]
-                ans = f"{choice([left, right])}. " + choice(["Выбрать было непросто.", "Очевидно же", "Стыдно не знать...", "Как завещал Жак Фреско.", "И кстати удали Бравл Старс."])
+                ans = choice([words[i - 1], words[i + 1]])
+                if ans[-1:] in "?!.,:;":
+                    ans = ans[:-1]
+                ans = ans[0].upper() + ans[1:]
+                ans = f"{ans}. " + choice(["Выбрать было непросто.", "Очевидно же", "Стыдно не знать...", "Как завещал Жак Фреско.", "И кстати удали Бравл Старс."])
         if ans is None:
             for qw in qwords:
                 if qw in query:
