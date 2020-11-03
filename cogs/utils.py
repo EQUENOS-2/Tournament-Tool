@@ -498,7 +498,10 @@ class utils(commands.Cog):
             if 0 < i < len(words) - 1:
                 left = words[i - 1]
                 right = words[i + 1]
-                ans = f"{choice([left, right])}. " + choice(["Выбрать было непросто.", "Очевидно же", "Невпопад, да?(", "Как завещал Жак Фреско."])
+                if right[-1:] in "?!.,:;":
+                    right = right[:-1]
+                left = left[0].upper() + left[1:]
+                ans = f"{choice([left, right])}. " + choice(["Выбрать было непросто.", "Очевидно же", "Стыдно не знать...", "Как завещал Жак Фреско.", "И кстати удали Бравл Старс."])
         if ans is None:
             for qw in qwords:
                 if qw in query:
