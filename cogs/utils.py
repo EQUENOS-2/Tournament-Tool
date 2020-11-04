@@ -379,10 +379,7 @@ class utils(commands.Cog):
         await ctx.send(embed=reply)
 
 
-    @commands.cooldown(1, 1, commands.BucketType.member)
-    @commands.check_any(
-        commands.has_permissions(administrator=True),
-        is_guild_moderator() )
+    @commands.cooldown(1, 300, commands.BucketType.member)
     @commands.command(
         aliases=["шар"],
         help="узнать правду",
@@ -496,11 +493,9 @@ class utils(commands.Cog):
         if "или" in words:
             i = words.index("или")
             if 0 < i < len(words) - 1:
-                ans = choice([words[i - 1], words[i + 1]])
-                if ans[-1:] in "?!.,:;":
-                    ans = ans[:-1]
-                ans = ans[0].upper() + ans[1:]
-                ans = f"{ans}. " + choice(["Выбрать было непросто.", "Очевидно же", "Стыдно не знать...", "Как завещал Жак Фреско.", "И кстати удали Бравл Старс."])
+                left = words[i - 1]
+                right = words[i + 1]
+                ans = f"{choice([left, right])}. " + choice(["Выбрать было непросто.", "Очевидно же", "Невпопад, да?(", "Как завещал Жак Фреско."])
         if ans is None:
             for qw in qwords:
                 if qw in query:

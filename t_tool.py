@@ -13,7 +13,7 @@ db_token = str(os.environ.get("db_token"))
 prefix = "+"
 
 intents = discord.Intents.all()
-client = commands.Bot(command_prefix=prefix, intents=intents)
+client = commands.Bot(prefix, intents=intents)
 client.remove_command("help")
 cluster = MongoClient(db_token)
 db = cluster["tournament_tool_db"]
@@ -23,8 +23,7 @@ db = cluster["tournament_tool_db"]
 #                  Variables                   |
 #----------------------------------------------+
 owner_ids = [
-    301295716066787332,
-    497708957020979210
+    301295716066787332
 ]
 
 #----------------------------------------------+
@@ -44,7 +43,7 @@ def from_hex(hex_code):
     return int(hex_code[1:], 16)
 
 
-def is_guild_moderator():
+def is_guild_moderator(_ctx_=None):
     def predicate(ctx):
         mod_roles = Server(ctx.guild.id, projection={"mod_roles", True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
@@ -57,6 +56,8 @@ def is_guild_moderator():
             return True
         else:
             raise IsNotModerator()
+    if _ctx_ is not None:
+        return predicate(_ctx_)
     return commands.check(predicate)
 
 
@@ -564,20 +565,27 @@ async def top(ctx, page: int=1):
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
-        
-        def TimeExpand(time):
-            if time//60 > 0:
-                return str(time//60)+'мин. '+str(time%60)+' сек.'
-            elif time > 0:
-                return str(time)+' сек.'
-            else:
-                return f"0.1 сек."
-        
-        cool_notify = discord.Embed(
-                title='⏳ Подождите немного',
-                description = f"Осталось {TimeExpand(int(error.retry_after))}"
-            )
-        await ctx.send(embed=cool_notify)
+        try:
+            ismod = is_guild_moderator(ctx)
+        except:
+            ismod = False
+        if ismod or ctx.author.guild_permissions.administrator:
+            ctx.command.reset_cooldown(ctx)
+            await ctx.reinvoke()
+        else:
+            def TimeExpand(time):
+                if time//60 > 0:
+                    return str(time//60)+'мин. '+str(time%60)+' сек.'
+                elif time > 0:
+                    return str(time)+' сек.'
+                else:
+                    return f"0.1 сек."
+            
+            cool_notify = discord.Embed(
+                    title='⏳ Подождите немного',
+                    description = f"Осталось {TimeExpand(int(error.retry_after))}"
+                )
+            await ctx.send(embed=cool_notify)
     
     elif isinstance(error, commands.MissingPermissions):
         if ctx.author.id not in owner_ids:
