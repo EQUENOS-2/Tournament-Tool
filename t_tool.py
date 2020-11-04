@@ -559,8 +559,7 @@ async def top(ctx, page: int=1):
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         mod_roles = Server(ctx.guild.id, projection={"mod_roles": True}).mod_roles
-        author_role_ids = [r.id for r in ctx.author.roles]
-        ismod = any([rid in author_role_ids for rid in mod_roles])
+        ismod = any([r.id in mod_roles for r in ctx.author.roles])
         if ismod or ctx.author.guild_permissions.administrator or ctx.author.id in owner_ids:
             ctx.command.reset_cooldown(ctx)
             await ctx.reinvoke()
