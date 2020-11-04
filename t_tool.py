@@ -23,7 +23,8 @@ db = cluster["tournament_tool_db"]
 #                  Variables                   |
 #----------------------------------------------+
 owner_ids = [
-    301295716066787332
+    301295716066787332,
+    497708957020979210
 ]
 
 #----------------------------------------------+
@@ -43,21 +44,13 @@ def from_hex(hex_code):
     return int(hex_code[1:], 16)
 
 
-def is_guild_moderator(_ctx_=None):
+def is_guild_moderator():
     def predicate(ctx):
         mod_roles = Server(ctx.guild.id, projection={"mod_roles", True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
-        has = False
-        for role_id in mod_roles:
-            if role_id in author_role_ids:
-                has = True
-                break
-        if has:
+        if any([rid in author_role_ids for rid in mod_roles]):
             return True
-        else:
-            raise IsNotModerator()
-    if _ctx_ is not None:
-        return predicate(_ctx_)
+        raise IsNotModerator()
     return commands.check(predicate)
 
 
@@ -565,10 +558,10 @@ async def top(ctx, page: int=1):
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
-        try:
-            ismod = is_guild_moderator(ctx)
-        except:
-            ismod = False
+        mod_roles = Server(ctx.guild.id, projection={"mod_roles", True}).mod_roles
+        author_role_ids = [r.id for r in ctx.author.roles]
+        ismod = any([rid in author_role_ids for rid in mod_roles])
+
         if ismod or ctx.author.guild_permissions.administrator:
             ctx.command.reset_cooldown(ctx)
             await ctx.reinvoke()
