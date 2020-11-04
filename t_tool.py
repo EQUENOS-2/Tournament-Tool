@@ -46,7 +46,7 @@ def from_hex(hex_code):
 
 def is_guild_moderator():
     def predicate(ctx):
-        mod_roles = Server(ctx.guild.id, projection={"mod_roles", True}).mod_roles
+        mod_roles = Server(ctx.guild.id, projection={"mod_roles": True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
         if any([rid in author_role_ids for rid in mod_roles]):
             return True
@@ -558,13 +558,13 @@ async def top(ctx, page: int=1):
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
-        mod_roles = Server(ctx.guild.id, projection={"mod_roles", True}).mod_roles
+        mod_roles = Server(ctx.guild.id, projection={"mod_roles": True}).mod_roles
         author_role_ids = [r.id for r in ctx.author.roles]
         ismod = any([rid in author_role_ids for rid in mod_roles])
-
-        if ismod or ctx.author.guild_permissions.administrator:
+        if ismod or ctx.author.guild_permissions.administrator or ctx.author.id in owner_ids:
             ctx.command.reset_cooldown(ctx)
             await ctx.reinvoke()
+        
         else:
             def TimeExpand(time):
                 if time//60 > 0:
