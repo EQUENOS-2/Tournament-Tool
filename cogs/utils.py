@@ -32,6 +32,22 @@ def unwrap_isolation(text, s):
     return out.strip()
 
 
+def antiping(string):
+    out = ""
+    for i in range(len(string) - 1):
+        s = string[i]
+        if s == "@":
+            sn = string[i + 1]
+            if not sn.isdigit() and sn != "!":
+                out += "@."
+            else:
+                out += s
+        else:
+            out += s
+    out += string[-1:]
+    return out
+
+
 def color_from_string(_color):
     Col = discord.Color
     _color = _color.lower()
@@ -387,7 +403,7 @@ class utils(commands.Cog):
         brief="вопрос",
         usage="Мне суждено играть в бравл старс?" )
     async def ball(self, ctx, *, query):
-        query = query.replace("@", "@ ")
+        query = antiping(query)
         qwords = {
             "почему": [
                 "Потому что каждый раз, когда земля делает один оборот вокруг своей оси, проходит 24 часа.",
