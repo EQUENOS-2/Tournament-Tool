@@ -387,6 +387,7 @@ class utils(commands.Cog):
         brief="вопрос",
         usage="Мне суждено играть в бравл старс?" )
     async def ball(self, ctx, *, query):
+        query = query.replace("@", "@ ")
         qwords = {
             "почему": [
                 "Потому что каждый раз, когда земля делает один оборот вокруг своей оси, проходит 24 часа.",
