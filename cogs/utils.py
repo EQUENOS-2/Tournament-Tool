@@ -1,21 +1,21 @@
 import discord
 from discord.ext import commands
-from discord.ext.commands import Bot
-import asyncio
 from random import randint, shuffle, choice
 from datetime import datetime, timedelta
-import os
 from io import BytesIO
+import wolframalpha, os
+
 
 #----------------------------------------------+
 #                 Variables                    |
 #----------------------------------------------+
 mc_memory = {}
+wolframclient = wolframalpha.Client(os.environ.get('wolframid'))
 
 #----------------------------------------------+
 #                 Functions                    |
 #----------------------------------------------+
-from functions import has_permissions, antiformat, get_message, find_alias, Server
+from functions import antiformat, get_message, Server
 
 
 def unwrap_isolation(text, s):
@@ -542,6 +542,39 @@ class utils(commands.Cog):
                 ans = choice(yesno)
         await ctx.send(ans)
 
+
+    @commands.cooldown(1, 30, commands.BucketType.member)
+    @commands.command(
+        aliases=["solve", "решить"],
+        help="математика",
+        description="решает почти любой школьный пример, если правильно его ввести",
+        brief="математическое выражение",
+        usage="all roots x^2-1=0"
+    )
+    async def calc(self, ctx, *, query):
+        answer = ""
+        async with ctx.channel.typing():
+            res = wolframclient.query(query)
+            try:
+                answer = next(res.results).text
+            except (AttributeError, StopIteration):
+                reply = discord.Embed(
+                    title="❌ | Чё за приколы",
+                    description="Если честно - запрос не слишком правильный, я ничего не понял.",
+                    color=discord.Color.dark_red()
+                )
+                reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+                await ctx.send(embed=reply)
+                
+        if answer != "":
+            reply = discord.Embed(
+                title=f":gear: | Запрос: `{query}`",
+                description=f"`->` {answer}"[:2048],
+                color=discord.Color.orange()
+            )
+            reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+            await ctx.send(embed=reply)
+    
     #----------------------------------------------+
     #                   Errors                     |
     #----------------------------------------------+
