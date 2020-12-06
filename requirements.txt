@@ -2,5 +2,6 @@ discord
 asyncio
 pymongo
 dnspython
+wolframalpha
 Pymoe
 pip
