@@ -569,8 +569,8 @@ class utils(commands.Cog):
         if answer != "":
             reply = discord.Embed(
                 title=f":gear: | Запрос: `{query}`",
-                description=f"`->` {answer}"[:2048],
-                color=discord.Color.orange()
+                description=f"```\n{answer}"[:2044] + "\n```",
+                color=discord.Color.gold()
             )
             reply.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
             await ctx.send(embed=reply)
